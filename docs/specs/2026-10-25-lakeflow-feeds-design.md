@@ -25,6 +25,7 @@ Success criteria:
 
 - Adding a feed that uses an existing operator needs only one registry YAML file. No code.
 - A failed or bad fetch never replaces the last good snapshot.
+- An `append` feed never has two copies of the same period, even after a retry or a second run on the same day.
 - The top/new sites feeds run in parallel with the Lambda for at least 7 days, with matching daily counts.
 - A rule or hunt can enrich any `lw_observables` value with all active context through one documented join or `feeds.lookup()`.
 - A cost view reports DBU per feed per month for each tier. The spike picks the default tier from these numbers.
@@ -37,6 +38,7 @@ Decisions taken (Alex, 2026-10-25):
 - The generic operators are in scope, not only the top/new sites feeds.
 - Panther enrichment parity is an explicit goal.
 - Cost tier: build both the cheap tier (views) and the SDP tier for the spike feeds. Choose the default from measured cost.
+- Three ingest modes: `append` (one copy per period, for example per day), `merge` (insert/update by key, for example IoCs), and `replace` (full replacement, for example AWS IP ranges).
 
 ## 2. Platform facts this design depends on
 
@@ -113,7 +115,8 @@ One YAML file per feed in `lakeflow-feeds/registry/`. Example:
 
 ```yaml
 name: tor_exit_nodes
-kind: reference              # events | reference
+mode: replace                # append | merge | replace (§4.1)
+history: {type: snapshots, retain_days: 90}   # replace only: none | snapshots | scd2
 category: anonymizer         # cdn, cloud, top_sites, new_domains, ioc, anonymizer, warninglist, entity, ...
 effect: enrich               # allow | enrich | never_allow | block
 observable_type: ip_addresses   # lw_observables bucket that the value matches
@@ -131,7 +134,7 @@ targets: [tables, datasource]
 parse:                       # one declaration for the SDP parser and the Lakewatch parser.yaml
   value: {field: line, type: string}
   fields: []
-  time: null                 # event-time field for kind: events
+  time: null                 # event-time field (merge feeds)
 validate: {min_records: 500, max_change_pct: 50, canaries: []}
 expiry: {max_age_days: 7}
 license: "Tor Project, public"
@@ -140,7 +143,7 @@ status: active               # active | dead | replaced_by:<feed>
 
 Field meanings:
 
-- `kind`. `events`: each record is a new fact with its own time (IoC sightings, new domain registrations). `reference`: each fetch is the full state of a list on that day (top sites, IP ranges, warninglists).
+- `mode` (with `period`, `key`, `history`, `deletes`): how a fetch relates to the data that is already there. See §4.1.
 - `effect`. This encodes how detections may use the list:
   - `allow`: may suppress alerts, for example AWS CloudFront and S3 ranges only.
   - `enrich`: context only, never suppression, for example EC2 ranges, CDNs, open resolvers, Tor.
@@ -153,7 +156,29 @@ The registry validator rejects these configurations:
 - `sink: zerobus` with a format that has no per-record split;
 - `sink: zerobus` for a feed above the size limit (the limit is set by the spike);
 - `effect: allow` on `category: cloud` unless a service filter is set;
-- a missing `license`.
+- a missing `license`;
+- `mode: append` without `period`, `mode: merge` without `key`, `history` on a mode other than `replace`;
+- `mode: replace` with `datasource` in `targets` (a full list re-ingested on every fetch has no meaning in a parsed table).
+
+### 4.1 Ingest modes
+
+Both sinks are append-only (Zerobus can't update or delete). The mode doesn't change how the operator writes. It changes how a fetch is **committed** and how readers and curation **interpret** the raw rows. The views tier applies the mode at read time (merge-on-read). The SDP tier materializes it.
+
+| | `append` | `merge` | `replace` |
+|---|---|---|---|
+| Meaning | each fetch is the data for one **period**; periods accumulate | each fetch inserts new keys and updates existing ones | each fetch is the **complete current state**; older fetches leave the current view |
+| Examples | Tranco, Umbrella, WhoisDownload new domains, EPSS daily scores | ThreatFox, URLhaus, TAXII, OTX, GreyNoise, KEV | AWS/GCP/Azure/Cloudflare ranges, Tor exits, MISP warninglists, PSL |
+| Required settings | `period: {source, granularity}`; `source` is `zip_mtime`, `last_modified`, `field:<name>`, `today`, or `yesterday`; `granularity` is `day`, `hour`, or `week` | `key` (default `[observable_type, value]`), optional `sequence_by` (source update field; default `fetched_at`), `deletes` | `history` |
+| Uniqueness rule | **at most one committed fetch per `(feed, period)`** (§5) | latest version per `(feed, key)` wins | only the latest committed fetch is current |
+| Deletes | none | `none`, `tombstone_field:<f>`, or `absent_in_full_fetch` (for feeds that send the full list). Always a soft delete (`deleted_at`), never a hard delete (KEV lesson: a removal is a correction) | implicit: a value that is missing in the new fetch is no longer current |
+| `context_current` | the latest committed period (or the N-day stable set through `top_sites_stable()`) | keys that are not deleted and not expired | the rows of the latest committed fetch |
+| History | all periods (the data itself is the history) | `first_seen` = min, `last_seen` = max over versions; full version history only in the SDP tier with `history: scd2` | `none`; `snapshots` (keep the last `retain_days` of fetches); or `scd2` (validity intervals, "was this IP an AWS IP at event time?") |
+| Views tier | `QUALIFY` the latest committed fetch per `(feed, period)` | `QUALIFY row_number() OVER (PARTITION BY feed, key ORDER BY sequence DESC) = 1`, plus min/max aggregates | the latest committed `fetch_id` per feed; compaction removes snapshots outside `retain_days` |
+| SDP tier | append flow into a table clustered by `(feed, period)`, gated by `committed_fetches` | AUTO CDC, SCD1 (or SCD2 with `history: scd2`), with `sequence_by` | AUTO CDC FROM SNAPSHOT (SCD2) for `scd2`; otherwise a materialized view of the latest fetch |
+| Lakewatch datasource | allowed for event-like feeds (new domains); not by default for top-1M lists | default target (each new version is appended as an event) | rejected by the validator |
+| Extra validation | the period from the data must match the period from the source metadata | the share of updated keys per fetch (catches a feed that suddenly resends everything with new values) | stricter `max_change_pct` default (20%): an empty or truncated list would otherwise wipe the current state |
+
+The views tier uses window functions over the raw rows. That is cheap for small feeds, but it gets expensive for large merge feeds (millions of keys, like the 12M rows in `cybersecurity.threatintel.iocs`). Such feeds should use `curation: sdp`, and the spike measures where the limit is (S6).
 
 ## 5. State, manifests, and the commit protocol
 
@@ -169,7 +194,16 @@ The registry validator rejects these configurations:
 
 If a check fails: no write, no manifest, no state update, and the job run fails. The last good snapshot stays current.
 
-**Committed fetch.** A downstream reader treats a `fetch_id` as committed only when its manifest exists and the number of distinct `record_no` values equals the manifest count. Readers deduplicate on `(fetch_id, record_no)`, which handles Zerobus at-least-once delivery and partial writes after a crash. The Lakewatch datasource can't check manifests. Validate-first makes sure that it only sees validated data. It can still see a partial fetch after a crash, which is acceptable for `kind: events`.
+**One fetch per period (`mode: append`).** For append feeds the manifest path includes the period: `manifests/<feed>/period=<yyyy-mm-dd>/<fetch_id>.json`. There are two guards:
+
+1. Before the download: when the period is known from metadata (`Last-Modified`, or `today`/`yesterday`), and a committed manifest already exists for that period, the run ends without downloading.
+2. After the download: when the period is known only from the data (`zip_mtime`, `field:<name>`), the same check runs before any write.
+
+So a second run on the same day, or a retry, never adds a second copy of that day. Reloading a period needs an explicit `force=true`. It writes a new fetch, and readers take the **latest committed fetch per `(feed, period)`**. Because of this read rule, a forced reload or a Zerobus duplicate still gives exactly one copy of each day.
+
+The `feed_changed` sensor uses the same check: for daily lists it completes only when the source period is newer than the last committed period.
+
+**Committed fetch.** A downstream reader treats a `fetch_id` as committed only when its manifest exists and the number of distinct `record_no` values equals the manifest count. Readers deduplicate on `(fetch_id, record_no)`, which handles Zerobus at-least-once delivery and partial writes after a crash. The Lakewatch datasource can't check manifests. Validate-first makes sure that it only sees validated data. It can still see a partial fetch after a crash, which is acceptable for `mode: merge` (each record is an independent upsert).
 
 ## 6. Record contracts
 
@@ -179,7 +213,12 @@ If a check fails: no write, no manifest, no state update, and the job run fails.
 
 **Normalized record.** Written when `normalize: true`, to the shared table `cybersecurity.feeds_raw.records`, clustered by `feed, fetch_id`:
 
-`feed, fetch_id, fetched_at, kind, category, effect, observable_type, value, ip, domain, url, hash_md5, hash_sha1, hash_sha256, email, valid_from TIMESTAMP, valid_until TIMESTAMP, attrs VARIANT`
+`feed, fetch_id, fetched_at, mode, period DATE, record_key STRING, sequence TIMESTAMP, deleted BOOLEAN, category, effect, observable_type, value, ip, domain, url, hash_md5, hash_sha1, hash_sha256, email, valid_from TIMESTAMP, valid_until TIMESTAMP, attrs VARIANT`
+
+- `period` is set for `append` feeds only.
+- `record_key` is the serialized `key` for `merge` feeds.
+- `sequence` is `sequence_by` or `fetched_at`.
+- `deleted` is set by `deletes: tombstone_field`. `absent_in_full_fetch` deletes are found at read or curation time, not by the operator.
 
 There is one typed column per observable kind (`ip`, `domain`, …), and the operator fills exactly one of them. This lets one generic Lakewatch parser declare each column with a fixed observable type (spike question S5). `value` repeats the filled one for generic joins.
 
@@ -210,9 +249,9 @@ Shared behavior:
 No pipeline. SQL objects in `cybersecurity.feeds` over `feeds_raw.records` plus a `committed_fetches` view built from the manifests (read through `read_files`):
 
 - `feeds.snapshots`: committed records only, deduplicated.
-- `feeds.context_current`: the latest committed fetch per reference feed, plus events not expired (`valid_until`, `expiry.max_age_days`).
+- `feeds.context_current`: the current rows for each feed, by its mode (§4.1), without expired rows (`valid_until`, `expiry.max_age_days`).
 - `feeds.context_history`: first seen and last seen per `(feed, observable_type, value)`, from a window over fetches.
-- A weekly compaction job (OPTIMIZE, plus pruning of old reference snapshots beyond a retention window kept per feed) keeps the queries cheap.
+- A weekly compaction job (OPTIMIZE, plus removal of `replace` snapshots outside `history.retain_days`) keeps the queries cheap.
 
 You pay only for queries and the rare compaction.
 
@@ -224,10 +263,10 @@ SDP pipeline `feeds_curated` (serverless). It runs **one update for all `curatio
 |---|---|---|
 | raw | `feeds_raw.<feed>` or Auto Loader over `landing/` | raw record contract |
 | log | `feeds.fetch_log` | from manifests |
-| reference | `feeds.snapshots_sdp` | committed fetches, parsed with the registry `parse:` block |
-| history | `feeds.context_history_sdp` | AUTO CDC FROM SNAPSHOT → SCD2 per `(feed, observable_type, value)` |
+| append | `feeds.periods_sdp` | committed fetches, one per `(feed, period)`, parsed with the registry `parse:` block |
+| replace | `feeds.context_history_sdp` | AUTO CDC FROM SNAPSHOT → SCD2 per `(feed, observable_type, value)` (`history: scd2`), or a materialized view of the latest fetch |
 | ranges | `feeds.context_ranges` | CIDRs as `start_ip`/`end_ip` (IPv4 and IPv6) + `joinkey` bucket (IPinfo pattern) |
-| events | `feeds.indicators` | AUTO CDC SCD1 per `(feed, type, value)` with `first_seen`/`last_seen`/`valid_until` |
+| merge | `feeds.indicators` | AUTO CDC SCD1 (or SCD2) per `(feed, key)` with `sequence_by`, `first_seen`/`last_seen`/`valid_until`, soft deletes |
 | domain views | `feeds.top_sites`, `feeds.new_sites` | provider, date, rank, domain, `registered_domain` (via `cybersecurity.udfs.extract_registered_domain`) |
 | helper | `feeds.top_sites_stable(n_days, max_rank)` | "N-day stable top-X" (Trost) |
 
@@ -247,7 +286,7 @@ There are two variants, and the spike measures both:
 - **Generic**: one datasource `feeds_context`, `existing_table` → `feeds_raw.records`, one generic parser over the normalized record. The typed observable columns map to `lw_observables`. Event time is `valid_from`, falling back to `fetched_at`. Adding a feed adds no Lakewatch cost.
 - **Per feed**: `existing_table` → `feeds_raw.<feed>` or `autoloader` → `landing/<feed>/`, with a parser generated from the registry `parse:` block (`scripts/gen_parsers.py`, following the lakewatch-parser-dev conventions).
 
-The default is event feeds only. A reference feed can be turned on for comparison, but it re-ingests the full list on every fetch, and the parsed table has no "current state" meaning.
+The default target is `merge` feeds. `append` feeds with event-like data (new domains) are allowed; the top-1M lists are not a default target. `replace` feeds are rejected (§4.1).
 
 Deployment is done by `scripts/deploy_lakewatch.py`, using the `lakewatch-api-v2` client.
 
@@ -298,7 +337,7 @@ Panther mapping:
 
 ## 11. Phases
 
-**Phase 0: spike** on az-alexott, using Tor exit nodes, Tranco top-1M, and abuse.ch ThreatFox recent (several IoC types in one feed). Both curation tiers and both datasource variants. Output: `docs/lakeflow-feeds-spike-findings.md`. Questions:
+**Phase 0: spike** on az-alexott, using Tor exit nodes (`replace`), Tranco top-1M (`append`), and abuse.ch ThreatFox recent (`merge`, several IoC types in one feed). The three feeds cover the three ingest modes. Both curation tiers and both datasource variants. Output: `docs/lakeflow-feeds-spike-findings.md`. Questions:
 
 - S1. Operator runtime: is Spark present, is there egress to the feed hosts, does `/Volumes` write work (FUSE or Files API), and what are the memory and duration limits?
 - S2. Zerobus: does the SDK install from the environment `dependencies`, or do we fall back to the REST API? Can the operator read the SP secret? What throughput do we get for 1M rows?
@@ -334,7 +373,7 @@ Panther mapping:
 
 ## 12. Testing
 
-- Unit tests, no network: fetchers against recorded fixtures (HTTP 200/304/429, zip, malformed input), the registry schema and validator rules, the pre-publish checks, the commit protocol with fake sinks (crash between write and manifest, duplicate delivery), and state handling.
+- Unit tests, no network: fetchers against recorded fixtures (HTTP 200/304/429, zip, malformed input), the registry schema and validator rules, the pre-publish checks, the commit protocol with fake sinks (crash between write and manifest, duplicate delivery), the per-period guard (second run on the same day, forced reload), merge semantics (out-of-order `sequence_by`, tombstones, `absent_in_full_fetch`), replace semantics (a value disappears, then comes back), and state handling.
 - Golden tests for `gen_parsers.py` and `gen_bundle.py`.
 - On az-alexott: a smoke job per feed, SDP expectations, the `committed_fetches` logic against an injected bad fetch, and a parser preview in the Lakewatch UI (the preview API is UI-only).
 - Parallel-run comparison against the Lambda output (phase 1).
