@@ -74,6 +74,37 @@ Existing data on az-alexott:
 - UDF `cybersecurity.udfs.extract_registered_domain`.
 - `lwv2_aottdb` exists, and the datasource list is empty.
 
+## 2.1 Prior art and what we take from it
+
+**`~/work/cybersecurity/databricks-sirens`** (Databricks DnR, internal). Collectors in `databricks_dnr/sirens/intel/`, jobs in `deploy-internal/intel/`:
+
+- Collectors: abuse.ch (ThreatFox, URLhaus, Feodo, MalwareBazaar), PhishTank, Tranco, MISP warninglists, ESET malware-ioc, a generic line-feed `SimpleCollector` (used for Infoblox and others), about 24 cloud and SaaS IP-range providers, LevelBlue OTX, IT-ISAC (TruStar), and Validin.
+- Bronze contract: `_source, _type, _raw_record, _collection_ts`. This is the same idea as our raw record. The `_type` column (`indicator`, `report`, `benign-indicator`) is worth copying.
+- The normalized intel schema adds `indicator_type` (`mal_domain`, `mal_sha256`, …), `tlp`, `tags`, `flags`, `context`, `date_first`, and `date_last`.
+- The write modes already exist there as ad hoc helpers, which confirms the three modes in §4.1:
+  - Tranco: `replaceWhere date = <day>` (append, one copy per day).
+  - Cloud ranges: a daily append, where readers take the latest date (replace with snapshots).
+  - Others: `write_ignore_duplicates`, an anti-join on the whole `_raw_record` (merge by content).
+- Lessons:
+  1. `get_all_ranges()` collects every provider in one run, and `safe_fetch()` swallows errors. So when one provider fails, its ranges silently disappear for that day. We make **one feed per provider**, each with its own validation and commit, and combine them in a view.
+  2. Some sources need custom code: scraping the Microsoft service-tags page (with a `curl` User-Agent), Fivetran and Atlassian HTML, tags taken from ESET repository paths, CrowdStrike ranges built from DNS lookups. The registry needs `headers` and a **custom fetcher escape hatch** (§7).
+  3. MISP warninglists and ESET come from a **branch archive** (`main.zip`), not from a release, and big lists (tranco, crux) are excluded. `github_repo` becomes `github_repo` with `ref: release | branch | tag` and `paths` / `exclude_paths`.
+  4. `SimpleCollector` covers many line feeds with `ignore_pattern` and a `match_pattern` regex (named groups become fields), plus static fields (`type`, `indicator_type`, `tags`). This goes into the registry `parse:` block for `format: lines`.
+  5. IP ranges: a later rewrite pre-builds a **disjoint range table**. Overlapping CIDRs are split into non-overlapping intervals that carry an array of providers. Each IP then matches at most one row, through one broadcast range join with a `range_join` bin hint. The benchmark (`notebooks/perf/cloud_ranges_disjoint_benchmark.py`) shows that building it once beats building it per query. The old `ip_min`/`ip_max` as `double` lose precision for IPv6.
+  6. `install_threat_intel_views.py` builds **curated IoC views**: C2 domains minus allowlists, minus popular domains (the latest Tranco), minus eTLDs, with special handling of dynamic-DNS bases through `registered_domain`. This is the `effect` model (§4) applied to rules.
+  7. `gold_domain_iocs.py` defines **domain suffix matching**: a host matches an IoC on itself or on any parent with at least two labels. `*.evil.com` matches strict subdomains only. The highest score wins, and the most specific suffix breaks ties.
+  8. API pollers use a lookback window (`modified_since` = now − N days, `max_pages`, fail fast when the first page fails). The windows overlap, so the merge must deduplicate.
+  9. Validin is an on-demand lookup API, not a feed. It is out of scope.
+- The code is internal. We port **public sources and the patterns only**, not the internal parts (Databricks IP allowlists, secfood tables).
+
+**`~/work/cybersecurity/databricks-cybersecurity-playground/vuln-info-ingest`** (Alex). CVE v5, GHSA, OSV, and KEV as a bundle of serverless jobs:
+
+- One `<source>_raw` table per source: `VARIANT` payload + id columns, Change Data Feed on. One `<source>_fetch_log` row per load run. The silver tables are kept in sync from the raw change feed.
+- MERGE updates a row only when `date_modified` / `modified` advanced. This is our `sequence_by`.
+- **Incremental plus full-load fallback**: the incremental task sets the task value `needs_full_load` (too many changes, no watermark, or a gap in the source change log), and a condition task runs the full load. The watermark overlap (30 min / 6 h) protects against CDN-cached stale reads. The OSV full load deletes ids that are missing from the snapshot, but it refuses to run below `min_snapshot_ratio` (0.9).
+- Bundle conventions: `catalog`/`schema`/`volume` variables, schedules paused in the `dev` target, all settings as job parameters.
+- Scope boundary: CVE v5, OSV, and GHSA are large (OSV `all.zip` is 2.6 GB) and need Spark MERGE, so they **stay in vuln-info-ingest**. The feeds framework does not re-implement them. KEV is small and could move later; EPSS is a new candidate. Both are exposed to the enrichment layer through the `cve_id` key.
+
 ## 3. Architecture
 
 ```
@@ -125,6 +156,7 @@ fetch:
   url: https://check.torproject.org/torbulkexitlist
   format: lines              # lines | csv | json | jsonl | zip+csv | stix
   connection: null           # UC HTTP connection name, for authenticated sources
+  headers: {}                # e.g. {User-Agent: curl/8.1.2} for the Microsoft download page
 change_detection: etag       # etag | last_modified | content_hash | json_field | release | cursor
 schedule: {every: 1h}        # or {daily_after: "06:00", wait_until_available: 12h}
 sink: zerobus                # zerobus | volume
@@ -134,6 +166,9 @@ targets: [tables, datasource]
 parse:                       # one declaration for the SDP parser and the Lakewatch parser.yaml
   value: {field: line, type: string}
   fields: []
+  ignore_pattern: '^#'       # format: lines (sirens SimpleCollector)
+  match_pattern: null        # regex with named groups → fields
+  static: {indicator_type: anonymizer_ip, tags: [tor]}
   time: null                 # event-time field (merge feeds)
 validate: {min_records: 500, max_change_pct: 50, canaries: []}
 expiry: {max_age_days: 7}
@@ -209,15 +244,18 @@ The `feed_changed` sensor uses the same check: for daily lists it completes only
 
 **Raw record.** Always written, to `feeds_raw.<feed>` (Zerobus sink) or as a landing file (volume sink):
 
-`feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING, record_no BIGINT, payload STRING`
+`feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING, record_no BIGINT, record_type STRING, payload STRING`
+
+`record_type` comes from sirens `_type`: `indicator`, `report`, `benign-indicator`, `range`. TAXII and IT-ISAC style feeds send reports and indicators in one fetch. `payload` stays `STRING` in the raw record. vuln-info-ingest stores `VARIANT`, and whether Zerobus accepts `VARIANT` is spike question S7.
 
 **Normalized record.** Written when `normalize: true`, to the shared table `cybersecurity.feeds_raw.records`, clustered by `feed, fetch_id`:
 
-`feed, fetch_id, fetched_at, mode, period DATE, record_key STRING, sequence TIMESTAMP, deleted BOOLEAN, category, effect, observable_type, value, ip, domain, url, hash_md5, hash_sha1, hash_sha256, email, valid_from TIMESTAMP, valid_until TIMESTAMP, attrs VARIANT`
+`feed, fetch_id, fetched_at, mode, period DATE, record_key STRING, sequence TIMESTAMP, deleted BOOLEAN, category, effect, indicator_type, tlp, tags ARRAY<STRING>, score DOUBLE, observable_type, value, ip, domain, url, hash_md5, hash_sha1, hash_sha256, email, valid_from TIMESTAMP, valid_until TIMESTAMP, attrs VARIANT`
 
 - `period` is set for `append` feeds only.
 - `record_key` is the serialized `key` for `merge` feeds.
 - `sequence` is `sequence_by` or `fetched_at`.
+- `indicator_type` follows the sirens vocabulary (`mal_domain`, `mal_sha256`, `c2_ip`, …). `tlp` makes TLP-based row filters possible (for example, hide `TLP:RED` from wide groups). `score` is optional (0–1, as in the sirens gold IoCs).
 - `deleted` is set by `deletes: tombstone_field`. `absent_in_full_fetch` deletes are found at read or curation time, not by the operator.
 
 There is one typed column per observable kind (`ip`, `domain`, …), and the operator fills exactly one of them. This lets one generic Lakewatch parser declare each column with a fixed observable type (spike question S5). `value` repeats the filled one for generic joins.
@@ -232,12 +270,17 @@ Generic operators, registered as Lakeflow Integrations. Each one takes `feed=<na
 |---|---|---|---|
 | `http_snapshot` | function | Fetch a URL with a conditional GET; formats lines/csv/json/jsonl/zip+csv | Tor, Tranco, Umbrella, WhoisDownload, cloud IP ranges, PSL |
 | `feed_changed` | sensor | Wait until a source publishes a new version (daily lists with unknown publish time; Azure service tags weekly URL) | Tranco, Umbrella, WhoisDownload, Azure |
-| `github_release` | sensor + function | New release or commit in a repo → fetch the selected assets or paths | MISP warninglists, maltrail, TrailDiscover |
+| `github_repo` | sensor + function | A new release, tag, or branch commit → fetch the release assets or the branch archive, filtered by `paths` / `exclude_paths` | MISP warninglists (`main.zip`, without tranco/crux), ESET malware-ioc, maltrail, TrailDiscover |
 | `rest_paginated` | function | Cursor or Link-header paging with a `since` watermark through a UC connection | GreyNoise, OTX, Okta/Entra users |
 | `taxii21_poll` | function | TAXII 2.1 collections with an `added_after` cursor; single-IoC STIX patterns; `valid_until` | ISAC / vendor CTI |
+| `custom` | function | Escape hatch: `fetch.entrypoint: feedkit.custom.<module>:<function>` returns records; the commit protocol, validation, and sinks stay generic | Microsoft service tags (page scrape → JSON), Fivetran/Atlassian HTML, CrowdStrike (static + DNS-resolved) |
 | `dns_derive` | function | DNS-over-HTTPS lookups that build derived lists (SPF includes, MX, NTP pool, root/TLD NS, popular-domain IPs) | later phase |
 
 Shared behavior:
+
+- **One feed per upstream source.** For example, `cloud_ranges_aws`, `cloud_ranges_gcp`, … are separate feeds, not one collector. A failure in one provider then fails only that feed, and its last good snapshot stays current (sirens lesson 1). A view combines them.
+- **Incremental with full fallback** (vuln-info-ingest pattern), for merge feeds that have a change log: `fetch.incremental` with `watermark_overlap` and `full_reload_threshold`, plus `fetch.full`. The incremental task sets a task value, and a generated condition task runs the full fetch when needed.
+- **Lookback windows** for APIs without a cursor (OTX `modified_since`): an overlap is expected, and the merge deduplicates it.
 
 - HTTP 429 or a `Retry-After` header becomes `SensorResult.deferred(retry_after)` in sensors. In functions it becomes bounded retry with backoff.
 - Sensors are used where they add value: unknown publish times, rate limits, and upstream freshness gates. They are not needed only to detect a change, because the conditional GET already does that.
@@ -265,7 +308,8 @@ SDP pipeline `feeds_curated` (serverless). It runs **one update for all `curatio
 | log | `feeds.fetch_log` | from manifests |
 | append | `feeds.periods_sdp` | committed fetches, one per `(feed, period)`, parsed with the registry `parse:` block |
 | replace | `feeds.context_history_sdp` | AUTO CDC FROM SNAPSHOT → SCD2 per `(feed, observable_type, value)` (`history: scd2`), or a materialized view of the latest fetch |
-| ranges | `feeds.context_ranges` | CIDRs as `start_ip`/`end_ip` (IPv4 and IPv6) + `joinkey` bucket (IPinfo pattern) |
+| ranges | `feeds.context_ranges` | CIDRs as `start_ip`/`end_ip` (IPv4 and IPv6; `DECIMAL(39,0)` or two `BIGINT`s, never `DOUBLE`) + `joinkey` bucket (IPinfo pattern) |
+| ranges | `feeds.context_ranges_disjoint` | non-overlapping intervals with `ARRAY<STRUCT<feed, provider, service, region, effect>>`, rebuilt only when a range feed commits (sirens lesson 5); one broadcast range join per query |
 | merge | `feeds.indicators` | AUTO CDC SCD1 (or SCD2) per `(feed, key)` with `sequence_by`, `first_seen`/`last_seen`/`valid_until`, soft deletes |
 | domain views | `feeds.top_sites`, `feeds.new_sites` | provider, date, rank, domain, `registered_domain` (via `cybersecurity.udfs.extract_registered_domain`) |
 | helper | `feeds.top_sites_stable(n_days, max_rank)` | "N-day stable top-X" (Trost) |
@@ -294,6 +338,9 @@ Deployment is done by `scripts/deploy_lakewatch.py`, using the `lakewatch-api-v2
 
 - `feeds.context_current` and `feeds.context_ranges` are keyed by `observable_type`, which matches the `lw_observables` buckets.
 - `feeds.lookup(observable_type, value)` is a table function for single-entity lookups in hunts and Genie.
+- **Domain matching** follows the sirens suffix rules (lesson 7): the host itself or any parent with at least two labels; `*.x` matches strict subdomains only; the most specific suffix wins. `registered_domain` comes from `cybersecurity.udfs.extract_registered_domain`.
+- **`feeds.curated_iocs`**: `block` indicators minus `allow` context, where `never_allow` bases (dynamic DNS, free hosting) are never removed by an allow entry on the base. This is the generic form of the sirens curated C2 views (lesson 6).
+- IPs: a range join against `context_ranges_disjoint`.
 - Bulk join recipe for rules: `explode(lw_observables.<bucket>)` joined to `context_current`, plus a range join on `context_ranges` for IPs. Rules copy the matches into their signal output.
 
 Unlike Panther's `p_enrichment`, matching happens at query time over the lake, so hunts have the enrichment too, not only signals.
@@ -309,10 +356,10 @@ Panther mapping:
 | STIX/TAXII | `taxii21_poll` |
 | Tor exit nodes | `tor_exit_nodes` feed |
 | IPinfo (+ `_history`) | IPinfo Lite feed + `context_ranges` + SCD2 history |
-| MISP warninglists | `github_release` → all list types |
+| MISP warninglists | `github_repo` → all list types |
 | GreyNoise / OTX / Anomali / Google TI | `rest_paginated` + UC connection |
 | Okta / Google Workspace / Snowflake profiles | `rest_paginated`, `category: entity` (phase 3) |
-| TrailDiscover | `github_release` |
+| TrailDiscover | `github_repo` |
 | `p_enrichment` | `feeds.lookup()` + bulk join recipe |
 
 ## 9. Identity, secrets, and governance
@@ -345,6 +392,7 @@ Panther mapping:
 - S4. Can a UC HTTP connection be called from operator Python?
 - S5. Lakewatch: does `existing_table` work over a Zerobus-written table? Does the generic parser fill the right `lw_observables` buckets?
 - S6. Cost: DBU per feed-month for views versus SDP, and for the generic versus per-feed datasource. Decide the defaults and the Zerobus size limit.
+- S7. Does Zerobus accept `VARIANT` columns (JSON or Protobuf)? If yes, store the raw `payload` as `VARIANT`, as vuln-info-ingest does.
 
 **Phase 1: core and top/new sites.**
 
@@ -360,10 +408,11 @@ Panther mapping:
 
 **Phase 3: more operators and feeds.**
 
-- `github_release` (MISP warninglists, maltrail, TrailDiscover).
+- Port the public sirens sources: abuse.ch (ThreatFox, URLhaus, Feodo, MalwareBazaar), PhishTank, ESET malware-ioc, Infoblox open threat intel, and the public cloud and SaaS range providers (one feed each).
+- `github_repo` (MISP warninglists, maltrail, TrailDiscover).
 - `rest_paginated` (GreyNoise, OTX).
 - `taxii21_poll`.
-- Cloud IP ranges (AWS, GCP, Azure, Cloudflare, Fastly).
+- `custom` fetchers: Microsoft service tags, Fivetran, Atlassian, CrowdStrike.
 - IPinfo Lite (license check first), PSL, `dns_derive`.
 
 **Phase 4: adoption.**
@@ -386,7 +435,8 @@ lakeflow-feeds/
   src/feedkit/
     registry.py  state.py  manifest.py  validate.py  records.py
     sinks/{zerobus.py, volume.py}
-    fetchers/{http_snapshot.py, feed_changed.py, github_release.py, rest_paginated.py, taxii21.py, dns_derive.py}
+    fetchers/{http_snapshot.py, feed_changed.py, github_repo.py, rest_paginated.py, taxii21.py, dns_derive.py}
+    custom/              # escape-hatch fetchers (microsoft_service_tags.py, fivetran.py, ...)
     integrations/        # @integration wrappers
   registry/*.yaml
   parsers/               # generated parser.yaml files
@@ -402,7 +452,9 @@ The folder must be self-contained so it can move to its own repository when it b
 
 - Derived context from scheduled SQL over existing logs (Panther "SQL → lookup table").
 - Streaming feeds (certstream).
-- Large datasets (NSRL, full OSV `all.zip`, Rapid7 Sonar). They stay as Spark jobs.
+- Large datasets (NSRL, full OSV `all.zip`, Rapid7 Sonar). They stay as Spark jobs. CVE v5, OSV, and GHSA stay in vuln-info-ingest.
+- On-demand lookup APIs (Validin, VirusTotal).
+- Internal-only sirens sources (Databricks IP allowlists, secfood tables).
 - Retiring the Lambda and the old `cybersecurity.datasets.*` tables.
 - Customer packaging (bundle template, content pack) beyond keeping the folder self-contained.
 
