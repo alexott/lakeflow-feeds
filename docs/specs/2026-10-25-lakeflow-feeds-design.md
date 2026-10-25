@@ -58,6 +58,7 @@ Zerobus Ingest:
 - Needs a service principal with an OAuth secret and explicit `MODIFY` + `SELECT` on the table.
 - About 15,000 rows/s and 100 MB/s per stream.
 - The SDK may not install on serverless (the skill says so for runtime pip installs; the environment-spec install is not verified).
+- The REST API (Beta) needs no SDK: plain HTTPS `POST /zerobus/v1/tables/<table>/insert` with a JSON array of records, and it supports `VARIANT` columns as nested JSON. Because operators only need plain HTTPS, the REST API is a real option for the default writer, not only a fallback (S2).
 
 Lakewatch v2 datasources:
 
@@ -244,9 +245,9 @@ The `feed_changed` sensor uses the same check: for daily lists it completes only
 
 **Raw record.** Always written, to `feeds_raw.<feed>` (Zerobus sink) or as a landing file (volume sink):
 
-`feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING, record_no BIGINT, record_type STRING, payload STRING`
+`feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING, record_no BIGINT, record_type STRING, payload VARIANT`
 
-`record_type` comes from sirens `_type`: `indicator`, `report`, `benign-indicator`, `range`. TAXII and IT-ISAC style feeds send reports and indicators in one fetch. `payload` stays `STRING` in the raw record. vuln-info-ingest stores `VARIANT`, and whether Zerobus accepts `VARIANT` is spike question S7.
+`record_type` comes from sirens `_type`: `indicator`, `report`, `benign-indicator`, `range`. TAXII and IT-ISAC style feeds send reports and indicators in one fetch. `payload` is `VARIANT`, as in vuln-info-ingest. Zerobus can write `VARIANT` columns (confirmed by Alex, see the [Zerobus + VARIANT post](https://community.databricks.com/t5/technical-blog/schema-free-data-ingestion-with-zerobus-and-variant-type/ba-p/148399)). Through the REST API (Beta), the value is sent as a nested JSON object, not as a JSON string. Lines and CSV rows are wrapped as `{"line": ...}` or `{<column>: <value>, ...}`. The volume sink gets the same column through Auto Loader (`parse_json` on the line).
 
 **Normalized record.** Written when `normalize: true`, to the shared table `cybersecurity.feeds_raw.records`, clustered by `feed, fetch_id`:
 
@@ -392,7 +393,7 @@ Panther mapping:
 - S4. Can a UC HTTP connection be called from operator Python?
 - S5. Lakewatch: does `existing_table` work over a Zerobus-written table? Does the generic parser fill the right `lw_observables` buckets?
 - S6. Cost: DBU per feed-month for views versus SDP, and for the generic versus per-feed datasource. Decide the defaults and the Zerobus size limit.
-- S7. Does Zerobus accept `VARIANT` columns (JSON or Protobuf)? If yes, store the raw `payload` as `VARIANT`, as vuln-info-ingest does.
+- S7. Answered: Zerobus writes `VARIANT` through the REST API with JSON records (`POST /zerobus/v1/tables/<table>/insert`, a JSON array of records). The spike still checks it through the SDK path, the batch size limits of the REST call, and the largest single record we send.
 
 **Phase 1: core and top/new sites.**
 
