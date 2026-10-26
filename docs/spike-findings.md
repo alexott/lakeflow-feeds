@@ -124,4 +124,11 @@ Enabled filebeat sources → feeds: `abuseurl` → `urlhaus_urls`, `abusemalware
 - Keep the generic Lakewatch datasource for `merge` feeds. Note that domains and URLs land in the `hostnames` bucket.
 - Expiry for `merge` feeds is now based on the last-seen time (fixed in the final review: commit e1ea071). Feodo is still all-expired because its list is stale.
 - The ThreatFox merge key should probably include the port (or use `ioc_id`), or the port should be accepted as lost. Decide in Plan 3.
-- Default curation tier: pending S6.
+- Default curation tier: **views** (from the first S6 numbers). SDP is optional and only for SCD2 history and other outputs that views can't give cheaply.
+- Cost changes applied 2026-10-26 (bundle redeployed):
+  - `performance_target: STANDARD` on all feed jobs, the probe, and the SDP refresh job.
+  - The SDP refresh runs daily at 19:50 UTC (after the Tranco wait window), not hourly.
+  - `context_current_mv` is dropped; `context_current` stays a view.
+  - The Lakewatch datasource `feeds_context` runs every 6 hours (`at_least_every: 6h`), not hourly. The datasource API has no standard mode.
+- Plan 2: **change-only writes** for `merge` feeds without a cursor (key state with fingerprints, a daily heartbeat), and **retention** for `append` and `replace` feeds in `feeds_raw.records`. Design: spec §5. Reason: the views tier, Lakewatch, and SDP all scan `feeds_raw.records`, which grows by about 1M rows per day (Tranco) plus repeated IoCs (ThreatFox wrote 43k rows in 8 fetches).
+- Re-measure S6 after 2026-10-29 with the new settings: compare the DBU per run in standard mode with the numbers above.

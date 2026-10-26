@@ -70,8 +70,10 @@ class Lakewatch:
         found = self._find("datasources", "datasource_name", body["datasource_name"])
         if found is None:
             return self.api.do("POST", f"{BASE}/datasources", body=body)
-        return self.api.do("PATCH", f"{BASE}/datasources/{found['datasource_id']}", query={"update_mask": "parsers"},
-                           body={"parsers": body["parsers"], "warehouse_id": body["warehouse_id"]})
+        return self.api.do("PATCH", f"{BASE}/datasources/{found['datasource_id']}",
+                           query={"update_mask": "parsers,schedule"},
+                           body={"parsers": body["parsers"], "schedule": body["schedule"],
+                                 "warehouse_id": body["warehouse_id"]})
 
 
 def main(argv=None) -> int:
@@ -80,6 +82,9 @@ def main(argv=None) -> int:
     ap.add_argument("--catalog", required=True)
     ap.add_argument("--schema", default="feeds")
     ap.add_argument("--warehouse", required=True)
+    # Each run costs about 0.17 DBU (performance optimized; the API has no standard mode for datasources).
+    # IoC enrichment does not need hourly freshness.
+    ap.add_argument("--schedule", default="6h", help="datasource at_least_every, for example 1h, 6h, 1d")
     ap.add_argument("--source-table", default="cybersecurity.feeds_raw.records",
                     help="catalog.schema.table of the normalized records")
     args = ap.parse_args(argv)
@@ -94,7 +99,8 @@ def main(argv=None) -> int:
     pid, version = lw.ensure_parser("feeds_context", spec_text, "Lakeflow feeds generic IoC parser")
     ds = lw.ensure_datasource(datasource_body(
         catalog=args.catalog, schema=args.schema, name="feeds_context", source=source,
-        parser_id=pid, version=version, target_table="feeds_context", warehouse_id=args.warehouse))
+        parser_id=pid, version=version, target_table="feeds_context", schedule=args.schedule,
+        warehouse_id=args.warehouse))
     print(json.dumps({"parser_id": pid, "version": version, "datasource": ds.get("datasource_id")}, indent=2))
     return 0
 

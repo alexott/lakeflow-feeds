@@ -48,9 +48,9 @@ The abuse.ch and OTX feeds need API keys (see [Secrets](#secrets)). The license 
                      context_current, context_history, feed_health
                          |                              |
                          v                              v
-          SDP "feeds curated" (hourly :50)    Lakewatch v2 datasource feeds_context
-          context_current_mv, top_sites_sdp,  (existing_table on feeds_raw.records,
-          tor_history_scd2                     merge rows only) -> lw_observables
+          SDP "feeds curated" (daily 19:50)   Lakewatch v2 datasource feeds_context
+          top_sites_sdp, tor_history_scd2     (existing_table on feeds_raw.records,
+                                               merge rows only, every 6 h) -> lw_observables
 ```
 
 ### Collect
@@ -91,9 +91,9 @@ All feeds write to one shared table, `feeds_raw.records`. The main columns are `
   - `context_history`: first and last seen per value.
   - `feed_health`: last commit per feed.
   - `manifests_log` and `committed_fetches`: the commit log.
-- **SDP** (`pipelines/feeds_curated/`). Materialized versions for heavy reads: `context_current_mv`, `top_sites_sdp` (Tranco by period), and `tor_history_scd2` (SCD2 history of Tor exit nodes, made from snapshots). The `feeds curated refresh` job runs it every hour at :50.
+- **SDP** (`pipelines/feeds_curated/`). Optional; only for outputs that views can't give cheaply: `top_sites_sdp` (Tranco by period) and `tor_history_scd2` (SCD2 history of Tor exit nodes, made from snapshots). The `feeds curated refresh` job runs it once a day at 19:50 UTC, in standard performance mode. The SCD2 flow processes all snapshots since the last refresh, so the history keeps its hourly resolution.
 
-The spike measures the cost of both tiers before it picks a default.
+Views are the default tier. In the spike, one SDP refresh cost about 0.26 DBU, which is more than all hourly feed jobs together. A materialized copy of `context_current` was removed for this reason.
 
 ### Lakewatch
 
@@ -297,7 +297,7 @@ The deploy does these things:
 - It builds the `feedkit` wheel. `dynamic_version: true` adds a timestamp to the version. Without it, serverless keeps the old cached wheel.
 - It runs the Lakeflow Integrations generator.
 - It syncs `registry/` to `${workspace.file_path}/registry`.
-- It creates the feed jobs, the SDP pipeline, and the refresh job.
+- It creates the feed jobs, the SDP pipeline, and the refresh job. All jobs use `performance_target: STANDARD`: the same SKU with fewer DBUs, and 4–6 minutes more startup.
 
 The `spike` target does not use development mode, so the schedules stay active.
 
@@ -309,7 +309,7 @@ To check the runtime (egress, volumes, memory), run the probe job: `databricks b
 uv run python scripts/deploy_lakewatch.py --profile az-alexott --catalog lwv2_aottdb --warehouse <warehouse-id>
 ```
 
-The script creates the parser and the datasource. You can run it again: it updates the parser when the spec changes.
+The script creates the parser and the datasource. You can run it again: it updates the parser when the spec changes, and it sets the schedule. The default schedule is every 6 hours (`--schedule 6h`). Each run costs about 0.17 DBU, and the datasource API has no cheaper standard mode.
 
 ## Operate
 

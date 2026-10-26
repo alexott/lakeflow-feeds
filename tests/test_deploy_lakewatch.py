@@ -48,3 +48,16 @@ def test_ensure_datasource_creates_when_missing():
                            target_table="feeds_context", warehouse_id="wh")
     lw.ensure_datasource(body)
     assert api.calls[-1][0] == "POST" and api.calls[-1][1].endswith("/datasources")
+
+
+def test_ensure_datasource_updates_parsers_and_schedule():
+    api = FakeApi()
+    api.datasources = [{"datasource_id": "d1", "datasource_name": "feeds_context", "schema_name": "feeds"}]
+    lw = Lakewatch(api, "lwv2_aottdb", "feeds")
+    body = datasource_body(catalog="lwv2_aottdb", schema="feeds", name="feeds_context",
+                           source=("cybersecurity", "feeds_raw", "records"), parser_id="p1", version=2,
+                           target_table="feeds_context", schedule="6h", warehouse_id="wh")
+    lw.ensure_datasource(body)
+    method, path, sent = api.calls[-1]
+    assert method == "PATCH" and path.endswith("/datasources/d1")
+    assert sent["schedule"] == {"at_least_every": "6h"} and sent["warehouse_id"] == "wh"

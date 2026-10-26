@@ -9,6 +9,8 @@ x-env: &env
 x-run-as: &run_as
   run_as:
     service_principal_name: ${var.sp_application_id}
+  # Standard mode: same SKU, fewer DBUs, 4-6 min more startup. Feeds are hourly or daily, so the delay is fine.
+  performance_target: STANDARD
 
 resources:
   jobs:

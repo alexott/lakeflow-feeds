@@ -24,7 +24,11 @@ resources:
         service_principal_name: ${var.sp_application_id}
       max_concurrent_runs: 1
       tags: {feed: _curated}
-      schedule: {quartz_cron_expression: "0 50 * * * ?", timezone_id: UTC}
+      # Daily, after the Tranco wait window (06:00 + up to 12 h). A refresh costs about 0.26 DBU, mostly fixed
+      # overhead, so hourly cost more than all feed jobs together. The Tor SCD2 flow catches up on all
+      # snapshots since the last refresh, so the history keeps its hourly resolution.
+      schedule: {quartz_cron_expression: "0 50 19 * * ?", timezone_id: UTC}
+      performance_target: STANDARD
       tasks:
         - task_key: refresh
           pipeline_task:

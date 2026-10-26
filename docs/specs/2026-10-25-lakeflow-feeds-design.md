@@ -238,6 +238,19 @@ So a second run on the same day, or a retry, never adds a second copy of that da
 
 The `feed_changed` sensor uses the same check: for daily lists it completes only when the source period is newer than the last committed period.
 
+**Write only changes (`merge` feeds, Plan 2).** Window APIs (ThreatFox `days: 1`, URLhaus and MalwareBazaar "recent", Feodo's full list) return the same indicators on every hourly fetch. ThreatFox wrote 43k rows in 8 fetches on the first day. Each copy costs Zerobus ingest, storage, every `context_current` query, and every Lakewatch run. So the operator writes a record only when it is new or changed:
+
+- **Key state.** `state/<feed>.keys` holds one entry per `record_key`: a fingerprint (sha256 of the normalized row without the fetch fields) and the time of the last write. Entries older than `expiry.max_age_days` are dropped, so the file stays bounded. The sizes are small for window feeds (tens of thousands of keys). Cursor feeds (OTX) already get only modified records, so they skip the key state (`write: all`); only the 1-hour overlap repeats there.
+- **Heartbeat.** An unchanged key is written again when its last write is older than `heartbeat` (default 1 day). This keeps `last_seen`, `sequence`, and `valid_until` correct within one day, so expiry still works, with at most one copy per live key per day.
+- **Validate before the diff.** `min_records`, `max_change_pct`, and the canaries run on all fetched records, as now. The diff runs after the checks pass.
+- **Manifest.** `record_count` is the number of rows written (the commit check stays the same). New fields: `fetched_count` and `unchanged_count`. The state keeps `last_record_count` = fetched count, so `max_change_pct` compares like with like.
+- **Raw table.** Only the payloads of written records are stored. Each version of a record is still stored once, so replay still works.
+- **State update.** The key state is written after the manifest, like the feed state. If the run crashes after the sink write but before the state write, the next run writes those records again. That is a harmless duplicate (merge-on-read takes the newest).
+- **Deletes.** A key that is missing from a window fetch is not a delete. Deletes still come only from `deletes: tombstone_field`.
+- Registry: `write: changes | all`. The default is `changes` for `merge` feeds without a cursor, otherwise `all`. `replace` and `append` feeds always write full snapshots, because their readers need them.
+
+**Retention (Plan 2).** `append` and `replace` feeds grow without limit in the shared table (Tranco adds 1M rows per day). `retention: {periods: N}` for append feeds and `history.retain_days` for replace feeds are applied by one daily maintenance SQL statement (`DELETE` of old fetches from `feeds_raw.records`). The raw tables keep the full history for replay. Predictive optimization (or a weekly `OPTIMIZE`) handles file compaction.
+
 **Committed fetch.** A downstream reader treats a `fetch_id` as committed only when its manifest exists and the number of distinct `record_no` values equals the manifest count. Readers deduplicate on `(fetch_id, record_no)`, which handles Zerobus at-least-once delivery and partial writes after a crash. The Lakewatch datasource can't check manifests. Validate-first makes sure that it only sees validated data. It can still see a partial fetch after a crash, which is acceptable for `mode: merge` (each record is an independent upsert).
 
 ## 6. Record contracts
@@ -346,11 +359,11 @@ No pipeline. SQL objects in `cybersecurity.feeds` over `feeds_raw.records` plus 
 - `feeds.context_history`: first seen and last seen per `(feed, observable_type, value)`, from a window over fetches.
 - A weekly compaction job (OPTIMIZE, plus removal of `replace` snapshots outside `history.retain_days`) keeps the queries cheap.
 
-You pay only for queries and the rare compaction.
+You pay only for queries and the rare compaction. **This is the default tier** (decided 2026-10-26 from the S6 numbers: an hourly SDP refresh cost about 0.26 DBU, more than all feed jobs together). The query cost of the views depends on the size of `feeds_raw.records`, so change-only writes and retention (§5) are part of this tier.
 
 ### 8.2 Curation tier "sdp"
 
-SDP pipeline `feeds_curated` (serverless). It runs **one update for all `curation: sdp` feeds** on a shared schedule, not one update per feed, so the fixed cost is shared:
+SDP pipeline `feeds_curated` (serverless). It runs **one update for all `curation: sdp` feeds** on a shared schedule, not one update per feed, so the fixed cost is shared. It is **optional**: use it only for outputs that views can't give cheaply (SCD2 history from snapshots, disjoint ranges). It runs **daily in standard performance mode** (`performance_target: STANDARD` on the refresh job). Most of the cost of an update is fixed overhead (the spike measured about 0.26 DBU for a 97 s update with three small datasets in performance-optimized mode). A materialized copy of `context_current` is not worth it: it recomputes the whole merge-on-read window on every update. The AUTO CDC FROM SNAPSHOT flow processes all snapshots since the last update, so a daily refresh keeps the hourly resolution of the Tor history.
 
 | Layer | Object | Notes |
 |---|---|---|
@@ -382,7 +395,7 @@ There are two variants, and the spike measures both:
 
 The default target is `merge` feeds. `append` feeds with event-like data (new domains) are allowed; the top-1M lists are not a default target. `replace` feeds are rejected (§4.1).
 
-Deployment is done by `scripts/deploy_lakewatch.py`, using the `lakewatch-api-v2` client.
+Deployment is done by `scripts/deploy_lakewatch.py`, using the `lakewatch-api-v2` client. The datasource schedule is `at_least_every: 6h` (`--schedule`). Each run costs about 0.17 DBU in performance-optimized mode, and the datasource API has no standard mode (`compute_mode` is only `DS_COMPUTE_PERFORMANCE_OPTIMIZED` or not set, and a datasource without it still bills as performance optimized). IoC enrichment doesn't need hourly freshness.
 
 ### 8.4 Enrichment layer (Panther parity)
 
@@ -423,14 +436,17 @@ Panther mapping:
 ## 10. Cost
 
 - Every run is tagged with the feed name (job tags), and every SDP update and datasource run is tagged too.
-- `sql/cost_by_feed.sql` reads `system.billing.usage` (including `job_name = 'lakeflow_integrations'`) and reports DBU per feed per month for each part: operators, SDP, datasources, compaction.
+- `scripts/cost_by_feed.py` runs `scripts/cost_by_feed.sql` over `system.billing.usage` (filtered on `workspace_id`; the table is account-wide). It reports DBU and list-price USD per day for each part: feed jobs, SDP, the Lakewatch datasource, and Zerobus (`LAKEFLOW_CONNECT`, `PROCESSED_GB`, per `table_id`). It also splits the feed jobs' DBU by run time. Job tags are not in `custom_tags` on serverless, so the query joins `system.lakeflow.jobs`. Operator runs bill as `JOBS` under their own job; the `"Lakeflow Integrations"` job name from the preview guide was not seen.
 - Ways to reduce cost:
-  - the views tier;
+  - the views tier, which is the default;
+  - standard performance mode (`performance_target: STANDARD`) on all feed jobs and on the SDP refresh job: same SKU, fewer DBUs, 4–6 minutes more startup;
+  - a daily SDP refresh instead of an hourly one, and a 6-hour Lakewatch datasource schedule;
+  - change-only writes and retention (§5), so every reader scans less;
   - the generic datasource;
   - shared SDP updates;
   - grouping feeds with the same schedule into one job with parallel tasks, so sensors share compute;
   - conditional GET, so an unchanged source costs only a HEAD-sized request.
-- Shared compute is billed to the first job run that acquires it (doc). The cost view must allocate per job run carefully, and the spike checks how well this allocation works.
+- Shared compute is billed to the first job run that acquires it (doc). The spike confirmed it: runs that start while another run of the same service principal holds the compute have no billing rows. So per-feed job cost is split by run time, not read from the billed rows.
 
 ## 11. Phases
 
