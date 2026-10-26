@@ -27,7 +27,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "tests"]
+pythonpath = ["src", "tests", "scripts"]
 
 [tool.ruff]
 line-length = 120

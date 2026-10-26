@@ -1,0 +1,12 @@
+-- Zerobus needs explicit table-level grants; schema-level inheritance may not be enough.
+GRANT USE CATALOG ON CATALOG {{catalog}} TO `{{sp}}`;
+GRANT USE SCHEMA ON SCHEMA {{catalog}}.{{raw_schema}} TO `{{sp}}`;
+GRANT USE SCHEMA ON SCHEMA {{catalog}}.{{schema}} TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.records TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.tor_exit_nodes TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.tranco_top1m TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.feodo_ipblocklist TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.threatfox_recent TO `{{sp}}`;
+GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.landing TO `{{sp}}`;
+GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.manifests TO `{{sp}}`;
+GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.state TO `{{sp}}`;
