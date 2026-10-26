@@ -12,7 +12,12 @@ fetch:
   # (about 24 h of data), so the window never starts more than 12 h back (first run and after outages);
   # older history is in the filebeat-loaded cybersecurity.threatintel.iocs. 1,000 items per page.
   cursor: {param: modified_since, first_lookback_hours: 12, overlap_minutes: 60, max_lookback_hours: 12}
-  pagination: {next: next, records: results, max_pages: 95}
+  # One series per type, so a burst in one type (seen: 109k URLs from one pulse update) cannot block the
+  # others; a type over 95 pages is truncated (manifest truncated: true) instead of failing every run.
+  pagination: {next: next, records: results, max_pages: 95, on_limit: truncate}
+  split_by:
+    param: types
+    values: [IPv4, IPv6, domain, hostname, URL, URI, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, CIDR, email, CVE]
 change_detection: none
 schedule: {every: 1h}
 sink: zerobus

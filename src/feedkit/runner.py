@@ -91,7 +91,7 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
         raw_count=len(raw), source_url=result.url, source_version=info.source_version,
         transform_version=transform_version(spec.transform), started_at=ts(now),
         finished_at=ts(datetime.now(timezone.utc)), period=period.isoformat() if period else None, forced=force,
-        mode=spec.mode, sha256=result.sha256))
+        mode=spec.mode, sha256=result.sha256, truncated=result.truncated))
     save_state(storage, spec.name, FeedState(
         etag=result.etag, last_modified=result.last_modified, sha256=result.sha256,
         cursor=result.cursor or state.cursor, last_record_count=len(normalized), last_success_at=ts(now),

@@ -4,7 +4,7 @@ CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.manifests_log
 SELECT * FROM read_files(
   '/Volumes/{{catalog}}/{{schema}}/manifests/',
   format => 'json', recursiveFileLookup => true,
-  schema => 'feed STRING, fetch_id STRING, status STRING, record_count BIGINT, raw_count BIGINT, source_url STRING, source_version STRING, transform_version STRING, started_at STRING, finished_at STRING, period STRING, forced BOOLEAN, reprocessed_from STRING, mode STRING, sha256 STRING');
+  schema => 'feed STRING, fetch_id STRING, status STRING, record_count BIGINT, raw_count BIGINT, source_url STRING, source_version STRING, transform_version STRING, started_at STRING, finished_at STRING, period STRING, forced BOOLEAN, reprocessed_from STRING, mode STRING, sha256 STRING, truncated BOOLEAN');
 
 CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.committed_fetches
   COMMENT 'Fetches whose manifest is complete and whose rows all arrived.' AS

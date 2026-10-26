@@ -261,3 +261,10 @@ def test_cursor_is_saved_only_after_a_commit(tmp_path):
     with pytest.raises(ValidationFailed):
         run(spec, storage, MemorySink(), FakeFetcher(bad))
     assert load_state(storage, "tor").cursor == "2026-10-26T12:00:00+00:00"
+
+
+def test_truncated_fetch_is_marked_in_the_manifest(tmp_path):
+    res = ok(lines(2)); res.truncated = True
+    run(tor_spec(), PathStorage(tmp_path), MemorySink(), FakeFetcher(res))
+    [m] = manifests(tmp_path, "tor")
+    assert json.loads((tmp_path / m).read_text())["truncated"] is True

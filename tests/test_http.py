@@ -237,3 +237,23 @@ def test_cursor_start_is_capped_by_max_lookback():  # OTX: > 100k indicators per
     f = cursor_fetch(cursor={"param": "modified_since", "first_lookback_hours": 12, "overlap_minutes": 60,
                              "max_lookback_hours": 12})
     fetch(f, "none", FeedState(cursor="2026-10-20T00:00:00+00:00"), now=NOW)  # stale cursor after an outage
+
+
+@responses.activate
+def test_split_by_runs_one_paginated_series_per_value():
+    responses.get(API, json={"results": [{"t": "IPv4"}], "next": None},
+                  match=[responses.matchers.query_param_matcher({"modified_since": "2026-10-26T10:00:00+00:00", "types": "IPv4"})])
+    responses.get(API, json={"results": [{"t": "URL"}], "next": None},
+                  match=[responses.matchers.query_param_matcher({"modified_since": "2026-10-26T10:00:00+00:00", "types": "URL"})])
+    f = cursor_fetch(split_by={"param": "types", "values": ["IPv4", "URL"]})
+    r = fetch(f, "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW)
+    assert _json.loads(r.content) == {"results": [{"t": "IPv4"}, {"t": "URL"}]} and not r.truncated
+
+
+@responses.activate
+def test_truncate_keeps_items_and_marks_the_result():
+    for p in range(1, 5):
+        responses.get(API if p == 1 else f"{API}?page={p}", json={"results": [{"i": p}], "next": f"{API}?page={p + 1}"})
+    f = cursor_fetch(pagination={"next": "next", "records": "results", "max_pages": 3, "on_limit": "truncate"})
+    r = fetch(f, "none", FeedState(), now=NOW)
+    assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}, {"i": 3}]} and r.truncated

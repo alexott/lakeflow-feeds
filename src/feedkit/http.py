@@ -38,6 +38,7 @@ class FetchResult:
     sha256: str | None
     url: str
     cursor: str | None = None  # new cursor value; the runner saves it only after a commit
+    truncated: bool = False  # pagination stopped at max_pages with on_limit: truncate
 
 
 def resolve(fetch: Fetch, *, host: str | None, auth_headers: Callable[[], dict] | None,
@@ -82,10 +83,19 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
             start = max(start, now - timedelta(hours=fetch.cursor.max_lookback_hours))
         params, new_cursor = {fetch.cursor.param: start.isoformat()}, now.isoformat()
     if fetch.pagination:
-        pages = _paginate(fetch, session, url, headers, params, body, shown, sleep, attempts, timeout,
-                          max_retry_after)
-        content = json.dumps({fetch.pagination.records: pages}).encode()
-        return FetchResult(True, content, None, None, hashlib.sha256(content).hexdigest(), shown, new_cursor)
+        series = [None] if fetch.split_by is None else fetch.split_by.values
+        items, truncated = [], False
+        for value in series:
+            p = dict(params or {})
+            if value is not None:
+                p[fetch.split_by.param] = value
+            got, cut = _paginate(fetch, session, url, headers, p or None, body, shown, sleep, attempts, timeout,
+                                 max_retry_after)
+            items.extend(got)
+            truncated = truncated or cut
+        content = json.dumps({fetch.pagination.records: items}).encode()
+        return FetchResult(True, content, None, None, hashlib.sha256(content).hexdigest(), shown, new_cursor,
+                           truncated)
     if fetch.method == "GET" and change_detection == "etag" and state.etag:
         headers["If-None-Match"] = state.etag
     if fetch.method == "GET" and change_detection == "last_modified" and state.last_modified:
@@ -128,7 +138,7 @@ def _send(session, fetch: Fetch, url, headers, params, body, timeout):
 
 
 def _paginate(fetch: Fetch, session, url, headers, params, body, shown, sleep, attempts, timeout,
-              max_retry_after) -> list:
+              max_retry_after) -> tuple[list, bool]:
     """Follow the next-page links; any failure (or too many pages) fails the fetch, so the cursor stays put."""
     items: list = []
     for page in range(fetch.pagination.max_pages):
@@ -156,8 +166,10 @@ def _paginate(fetch: Fetch, session, url, headers, params, body, shown, sleep, a
         items.extend(jmespath.search(fetch.pagination.records, doc) or [])
         nxt = jmespath.search(fetch.pagination.next, doc)
         if not nxt:
-            return items
+            return items, False
         url, params = urljoin(url, nxt), None  # the next link carries the query; it may be relative (OTX)
+    if fetch.pagination.on_limit == "truncate":
+        return items, True
     raise FetchError(f"{shown}: more than max_pages={fetch.pagination.max_pages} pages; widen max_pages or poll more often")
 
 

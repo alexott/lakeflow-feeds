@@ -25,6 +25,7 @@ class Manifest:
     reprocessed_from: str | None = None
     mode: str | None = None
     sha256: str | None = None
+    truncated: bool = False
 
 
 def _dir(feed: str, period: str | None) -> str:

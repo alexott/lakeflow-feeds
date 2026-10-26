@@ -130,3 +130,9 @@ def test_pagination_records_must_be_a_plain_key(tmp_path):
     text = mutate(TOR, 'format: lines}', 'format: json, pagination: {next: next, records: "results[]"}}')
     with pytest.raises(RegistryError, match="records"):
         load_feed(write(tmp_path, text))
+
+
+def test_split_by_needs_pagination(tmp_path):
+    text = mutate(TOR, 'format: lines}', 'format: json, split_by: {param: types, values: [URL]}}')
+    with pytest.raises(RegistryError, match="split_by"):
+        load_feed(write(tmp_path, text))

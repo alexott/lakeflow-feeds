@@ -29,6 +29,14 @@ class Pagination(_Model):
     next: str  # JMESPath to the next-page URL in each response (null/empty = last page)
     records: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")  # key of the item list; pages are concatenated under it
     max_pages: int = 50
+    # fail: too many pages fails the fetch (cursor stays). truncate: keep what was read and mark the
+    # manifest truncated (for APIs that refuse large windows, e.g. OTX bursts of > 100k indicators).
+    on_limit: Literal["fail", "truncate"] = "fail"
+
+
+class SplitBy(_Model):
+    param: str  # query parameter, e.g. OTX "types"
+    values: list[str] = Field(min_length=1)
 
 
 class Cursor(_Model):
@@ -49,6 +57,7 @@ class Fetch(_Model):
     body: dict[str, Any] | None = None  # request body for POST APIs (ThreatFox get_iocs)
     body_format: Literal["json", "form"] = "json"  # form: application/x-www-form-urlencoded (MalwareBazaar)
     pagination: Pagination | None = None
+    split_by: SplitBy | None = None  # one paginated request series per value (needs pagination)
     cursor: Cursor | None = None
     connection: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)  # values may hold {{secrets/<scope>/<key>}} references
@@ -143,6 +152,8 @@ class FeedSpec(_Model):
         bad = malformed_refs([self.fetch.url, self.fetch.headers, self.fetch.body])
         if bad:
             raise ValueError(f"malformed secret reference (use {{{{secrets/<scope>/<key>}}}}): {bad}")
+        if self.fetch.split_by and not self.fetch.pagination:
+            raise ValueError("fetch.split_by needs fetch.pagination")
         if self.fetch.operator == "custom" and not self.fetch.entrypoint:
             raise ValueError("fetch.operator: custom needs fetch.entrypoint")
         return self
