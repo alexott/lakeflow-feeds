@@ -14,6 +14,9 @@ artifacts:
   python_artifact:
     type: whl
     build: uv build --wheel
+    # Serverless environments cache an installed wheel by name+version; a fixed 0.1.0 kept old code
+    # running after deploys. dynamic_version adds a build timestamp to the version on every deploy.
+    dynamic_version: true
   lakeflow_integrations_yaml:
     build: >
       uv run python -c "import shutil;
