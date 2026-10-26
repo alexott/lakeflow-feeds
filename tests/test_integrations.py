@@ -33,9 +33,15 @@ def commit_day(storage, feed, day):
                                      finished_at="f", period=day))
 
 
-def test_registry_path():
+def test_registry_path_is_required():
     assert integ.registry_path("/x/y") == Path("/x/y")
-    assert integ.registry_path("").name == "registry_data"
+    with pytest.raises(ValueError, match="registry_dir"):
+        integ.registry_path("")
+
+
+def test_wheel_has_no_feed_files():
+    from importlib import resources
+    assert not (resources.files("feedkit") / "registry_data").is_dir()
 
 
 def test_has_new_version_etag(tmp_path):
@@ -68,7 +74,7 @@ def wired(tmp_path, monkeypatch):
             raise state["head"]
         return state["head"]
 
-    def build(feed, registry_dir=""):
+    def build(feed, registry_dir):
         return integ.Deps(spec(), Settings(), storage, MemorySink(),
                           FakeFetcher(FetchResult(True, b"10.0.0.1\n", '"b"', None, "sha", "https://t")), head)
 
@@ -80,7 +86,7 @@ def wired(tmp_path, monkeypatch):
 
 def test_sensor_defers_when_unchanged(wired):
     ctx = FakeContext()
-    result = integ.FeedChangedSensor("tor", poll_minutes=15).poll(ctx)
+    result = integ.FeedChangedSensor("tor", "/reg", poll_minutes=15).poll(ctx)
     assert result.status == "deferred" and result.defer_for == dt.timedelta(minutes=15)
     assert ctx.values["first_poll_at"] == NOW.isoformat() and "changed" not in ctx.values
 
@@ -88,39 +94,39 @@ def test_sensor_defers_when_unchanged(wired):
 def test_sensor_completes_when_changed(wired):
     wired["head"] = ('"new"', None)
     ctx = FakeContext()
-    assert integ.FeedChangedSensor("tor").poll(ctx).status == "completed"
+    assert integ.FeedChangedSensor("tor", "/reg").poll(ctx).status == "completed"
     assert ctx.values["changed"] is True
 
 
 def test_sensor_gives_up_after_max_wait(wired):
     ctx = FakeContext()
     ctx.values["first_poll_at"] = (NOW - dt.timedelta(hours=13)).isoformat()
-    assert integ.FeedChangedSensor("tor", max_wait_hours=12).poll(ctx).status == "completed"
+    assert integ.FeedChangedSensor("tor", "/reg", max_wait_hours=12).poll(ctx).status == "completed"
     assert ctx.values["changed"] is False
 
 
 def test_sensor_defers_on_rate_limit(wired):
     wired["head"] = RateLimited(90)
-    result = integ.FeedChangedSensor("tor").poll(FakeContext())
+    result = integ.FeedChangedSensor("tor", "/reg").poll(FakeContext())
     assert result.status == "deferred" and result.defer_for == dt.timedelta(seconds=90)
 
 
 def test_collect_feed_runs_the_feed(wired, capsys):
-    integ.collect_feed("tor")
+    integ.collect_feed("tor", "/reg")
     out = capsys.readouterr().out
     assert '"status": "committed"' in out and '"record_count": 1' in out
 
 
 def test_entry_point_failure_writes_traceback(tmp_path, monkeypatch):
-    def broken_build(feed, registry_dir=""):
+    def broken_build(feed, registry_dir):
         raise RuntimeError("boom in build")
 
     monkeypatch.setattr(integ, "_BUILD", broken_build)
     monkeypatch.setattr(integ, "error_dir", lambda registry_dir="": str(tmp_path))
     with pytest.raises(RuntimeError, match="boom"):
-        integ.collect_feed("tor")
+        integ.collect_feed("tor", "/reg")
     with pytest.raises(RuntimeError, match="boom"):
-        integ.FeedChangedSensor("tor").poll(FakeContext())
+        integ.FeedChangedSensor("tor", "/reg").poll(FakeContext())
     files = sorted(p.name for p in tmp_path.iterdir())
     assert len(files) == 2 and all(f.startswith("tor-") for f in files)
     assert "boom in build" in (tmp_path / files[0]).read_text()
@@ -128,18 +134,18 @@ def test_entry_point_failure_writes_traceback(tmp_path, monkeypatch):
 
 def test_sensor_force_completes_immediately(wired):  # review #3
     ctx = FakeContext()
-    assert integ.FeedChangedSensor("tor", force=True).poll(ctx).status == "completed"
+    assert integ.FeedChangedSensor("tor", "/reg", force=True).poll(ctx).status == "completed"
     assert ctx.values["changed"] is True
 
 
 def test_sensor_timeout_fails_when_the_feed_is_stale(wired, tmp_path, monkeypatch):  # review #9
     from feedkit.state import FeedState, save_state
-    storage = integ._BUILD("tor").storage
+    storage = integ._BUILD("tor", "/reg").storage
     save_state(storage, "tor", FeedState(etag='"a"', last_success_at="2026-10-20T00:00:00.000000Z"))
     ctx = FakeContext()
     ctx.values["first_poll_at"] = (NOW - dt.timedelta(hours=13)).isoformat()
     with pytest.raises(integ.FeedStale, match="tor"):
-        integ.FeedChangedSensor("tor", max_wait_hours=12, stale_after_days=2).poll(ctx)
+        integ.FeedChangedSensor("tor", "/reg", max_wait_hours=12, stale_after_days=2).poll(ctx)
 
 
 def test_error_dir_follows_settings_volume_root(tmp_path):  # minor #17

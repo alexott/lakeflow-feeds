@@ -6,7 +6,6 @@ import datetime as dt
 import json
 from dataclasses import asdict, dataclass
 from functools import partial
-from importlib import resources
 from pathlib import Path
 from typing import Any, Callable
 
@@ -35,12 +34,13 @@ class Deps:
 
 
 def registry_path(registry_dir: str) -> Path:
-    if registry_dir:
-        return Path(registry_dir)
-    return Path(str(resources.files("feedkit") / "registry_data"))
+    """The feed registry lives outside the wheel; the bundle deploys it to ${workspace.file_path}/registry."""
+    if not registry_dir:
+        raise ValueError("registry_dir is required (the bundle passes ${workspace.file_path}/registry)")
+    return Path(registry_dir)
 
 
-def build_deps(feed: str, registry_dir: str = "") -> Deps:
+def build_deps(feed: str, registry_dir: str) -> Deps:
     from databricks.sdk import WorkspaceClient
 
     directory = registry_path(registry_dir)
@@ -120,7 +120,7 @@ def has_new_version(spec: FeedSpec, storage: Storage, head_fn, now: dt.datetime)
 
 @integration(display_name="Collect a security feed",
              description="Fetch, transform, validate, and land one feed from the feed registry.")
-def collect_feed(feed: str, registry_dir: str = "", force: bool = False) -> None:
+def collect_feed(feed: str, registry_dir: str, force: bool = False) -> None:
     try:
         deps = _BUILD(feed, registry_dir)
         outcome = run_feed(deps.spec, settings=deps.settings, storage=deps.storage, sink=deps.sink,
@@ -134,7 +134,7 @@ def collect_feed(feed: str, registry_dir: str = "", force: bool = False) -> None
 @integration(display_name="Wait for a new feed version",
              description="Wait, without holding compute, until a feed source publishes a new version.")
 class FeedChangedSensor(Sensor):
-    def __init__(self, feed: str, registry_dir: str = "", poll_minutes: int = 30, max_wait_hours: int = 12,
+    def __init__(self, feed: str, registry_dir: str, poll_minutes: int = 30, max_wait_hours: int = 12,
                  force: bool = False, stale_after_days: int = 2):
         self.feed, self.registry_dir = feed, registry_dir
         self.poll_minutes, self.max_wait_hours = int(poll_minutes), int(max_wait_hours)

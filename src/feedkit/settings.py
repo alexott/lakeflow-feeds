@@ -1,4 +1,4 @@
-"""Deployment settings (registry_data/settings.yaml). No secrets."""
+"""Deployment settings (registry/settings.yaml, deployed by the bundle). No secrets."""
 from __future__ import annotations
 
 from dataclasses import dataclass, fields

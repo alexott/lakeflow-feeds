@@ -4,14 +4,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from conftest import fixture_path
-from feedkit.integrations import registry_path
+from conftest import REGISTRY, fixture_path
 from feedkit.records import FetchInfo, normalized_row
 from feedkit.registry import load_registry
 from feedkit.settings import load_settings
 from feedkit.transform import run_transform
 
-FEEDS = load_registry(registry_path(""))
+FEEDS = load_registry(REGISTRY)
 NOW = datetime(2026, 10, 26, 6, 30, tzinfo=timezone.utc)
 
 
@@ -24,7 +23,7 @@ def test_tor_rejects_an_html_block_page():
 def test_packaged_registry_has_the_spike_feeds():
     assert sorted(FEEDS) == ["feodo_ipblocklist", "threatfox_recent", "tor_exit_nodes", "tranco_top1m"]
     assert {s.mode for s in FEEDS.values()} == {"append", "merge", "replace"}
-    assert load_settings(registry_path("") / "settings.yaml").catalog == "cybersecurity"
+    assert load_settings(REGISTRY / "settings.yaml").catalog == "cybersecurity"
 
 
 @pytest.mark.parametrize("name", sorted(FEEDS))
