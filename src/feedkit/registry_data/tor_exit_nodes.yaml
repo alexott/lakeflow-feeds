@@ -16,8 +16,9 @@ targets: [tables]
 transform:
   - records: lines
   - filter: {regex: '^[0-9A-Fa-f:.]+$'}  # IPs only; an HTML block page yields 0 records and fails min_records
+  - apply: {line: [ip_normalize]}        # drops IP-shaped junk ("1", "::", "dead.beef")
+  - drop_if_empty: [line]
   - set: {indicator_type: anonymizer_ip, tags: [tor]}
   - output: {value: line, indicator_type: indicator_type, tags: tags, attrs: {}}
 validate: {min_records: 500}
-expiry: {max_age_days: 7}
 license: "Tor Project, public data"

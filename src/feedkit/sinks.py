@@ -30,13 +30,15 @@ def zerobus_encode(row: dict) -> dict:
     for column in _TS_COLUMNS:
         if out.get(column) is not None:
             moment = datetime.fromisoformat(str(out[column]).replace("Z", "+00:00"))
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=timezone.utc)  # naive timestamps are UTC
             out[column] = (moment - _EPOCH) // timedelta(microseconds=1)
     for column in _DATE_COLUMNS:
         if out.get(column) is not None:
             out[column] = (date.fromisoformat(out[column]) - _EPOCH.date()).days
     for column in _VARIANT_COLUMNS:
         if column in out:
-            out[column] = json.dumps(out[column])
+            out[column] = None if out[column] is None else json.dumps(out[column])  # None -> SQL NULL
     return out
 
 
@@ -102,16 +104,21 @@ class ZerobusRestSink:
                 return
             last = f"HTTP {resp.status_code}: {resp.text[:500]}"
             if resp.status_code == 429 or resp.status_code >= 500:
-                self.sleep(2 ** attempt)
+                wait = 2 ** attempt
+                if resp.status_code == 429:
+                    try:
+                        wait = min(float(resp.headers.get("Retry-After", wait)), 60.0)
+                    except ValueError:
+                        pass
+                self.sleep(wait)
                 continue
             raise SinkError(f"Zerobus insert into {url} failed: {last}")
         raise SinkError(f"Zerobus insert into {url} gave up after {self.attempts} attempts: {last}")
 
     def write(self, table: str, rows: list[dict], *, fetch_id: str, day: date) -> None:
         url = f"{self.endpoint}/zerobus/v1/tables/{table}/insert"
-        encoded = [zerobus_encode(r) for r in rows]
-        for i in range(0, len(encoded), self.batch_size):
-            self._post(table, url, encoded[i:i + self.batch_size])
+        for i in range(0, len(rows), self.batch_size):  # encode per batch: no second full copy in memory
+            self._post(table, url, [zerobus_encode(r) for r in rows[i:i + self.batch_size]])
 
 
 class VolumeSink:

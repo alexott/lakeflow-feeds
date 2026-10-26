@@ -36,3 +36,8 @@ def test_feed_transform_matches_expected(name):
     info = FetchInfo(name, f"{name}-1", NOW, spec.fetch.url, None, None)
     rows = [normalized_row(spec, info, r, i) for i, r in enumerate(records)]
     assert all(r["value"] and r["observable_type"] for r in rows)
+
+
+def test_tor_drops_ip_shaped_junk():  # minor #12
+    _, records = run_transform(FEEDS["tor_exit_nodes"], b"185.220.101.1\n1\n::\ndead.beef\n")
+    assert [r["value"] for r in records] == ["185.220.101.1"]

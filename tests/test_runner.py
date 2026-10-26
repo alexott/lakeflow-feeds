@@ -213,3 +213,39 @@ def test_force_accepts_a_large_count_change(tmp_path):  # review #4
     with pytest.raises(ValidationFailed):
         run(tor_spec(), storage, sink, FakeFetcher(ok(lines(10))))
     assert run(tor_spec(), storage, sink, FakeFetcher(ok(lines(10))), force=True).status == "committed"
+
+
+def lm_tranco_spec():
+    data = tranco_spec().model_dump(by_alias=True)
+    data["period"] = {"source": "last_modified"}
+    data["change_detection"] = "last_modified"
+    return FeedSpec.model_validate(data)
+
+
+def test_last_modified_period_must_match_the_zip_date(tmp_path):  # minor #11
+    content = zipped((2026, 10, 25, 3, 0, 0), "1,google.com\n")
+    with pytest.raises(ValidationFailed, match="period"):
+        run(lm_tranco_spec(), PathStorage(tmp_path), MemorySink(),
+            FakeFetcher(ok(content, last_modified="Tue, 27 Oct 2026 01:00:00 GMT")))
+    out = run(lm_tranco_spec(), PathStorage(tmp_path), MemorySink(),
+              FakeFetcher(ok(content, last_modified="Sun, 25 Oct 2026 22:20:22 GMT")))
+    assert out.status == "committed" and out.period == date(2026, 10, 25)
+
+
+def test_manifest_records_mode_and_sha(tmp_path):  # minors #16, #19
+    storage = PathStorage(tmp_path)
+    out = run(tor_spec(), storage, MemorySink(), FakeFetcher(ok(lines(2))))
+    [m] = manifests(tmp_path, "tor")
+    body = json.loads((tmp_path / m).read_text())
+    assert body["mode"] == "replace" and body["sha256"] == hashlib.sha256(lines(2)).hexdigest()
+    assert out.status == "committed"
+
+
+def test_crash_between_manifest_and_state_does_not_duplicate(tmp_path):  # minor #19
+    storage = PathStorage(tmp_path)
+    run(tor_spec(change_detection="none"), storage, MemorySink(), FakeFetcher(ok(lines(3), etag=None)))
+    save_state(storage, "tor", FeedState())  # simulate: manifest written, state write lost
+    sink = MemorySink()
+    out = run(tor_spec(change_detection="none"), storage, sink, FakeFetcher(ok(lines(3), etag=None)))
+    assert out.status == "not_modified" and sink.writes == [] and len(manifests(tmp_path, "tor")) == 1
+    assert load_state(storage, "tor").sha256 == hashlib.sha256(lines(3)).hexdigest()  # state repaired

@@ -133,3 +133,30 @@ def test_secret_in_url_never_appears_in_result_or_errors():  # review #2
     with pytest.raises(FetchError) as e:
         fetch(f, "none", FeedState(), secret_lookup=lambda s, k: "s3cr3t", sleep=NO_SLEEP)
     assert "s3cr3t" not in str(e.value)
+
+
+@responses.activate
+def test_short_retry_after_is_retried_within_the_run():  # minor #13
+    responses.get(URL, status=429, headers={"Retry-After": "5"})
+    responses.get(URL, body=b"ok")
+    slept = []
+    assert fetch(F, "none", FeedState(), sleep=slept.append).content == b"ok"
+    assert slept == [5.0]
+
+
+@responses.activate
+def test_repeated_429_gives_up_with_rate_limited():  # minor #13
+    for _ in range(3):
+        responses.get(URL, status=429, headers={"Retry-After": "1"})
+    with pytest.raises(RateLimited):
+        fetch(F, "none", FeedState(), sleep=NO_SLEEP)
+    assert len(responses.calls) == 3
+
+
+@responses.activate
+def test_429_without_retry_after_waits_a_short_default():  # minor #13
+    responses.get(URL, status=429)
+    responses.get(URL, body=b"ok")
+    slept = []
+    assert fetch(F, "none", FeedState(), sleep=slept.append, max_retry_after=60).content == b"ok"
+    assert slept == [30.0]

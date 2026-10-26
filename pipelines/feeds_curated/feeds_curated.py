@@ -3,13 +3,14 @@ from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
 CATALOG = spark.conf.get("feeds.catalog", "cybersecurity")  # noqa: F821 (spark is provided by the pipeline)
-COMMITTED = f"{CATALOG}.feeds.committed_fetches"
-RECORDS_COMMITTED = f"{CATALOG}.feeds.records_committed"
+SCHEMA = spark.conf.get("feeds.schema", "feeds")  # noqa: F821
+COMMITTED = f"{CATALOG}.{SCHEMA}.committed_fetches"
+RECORDS_COMMITTED = f"{CATALOG}.{SCHEMA}.records_committed"
 
 
 @dp.materialized_view(name="context_current_mv", comment="Materialized context_current (SDP tier of the spike).")
 def context_current_mv():
-    return spark.read.table(f"{CATALOG}.feeds.context_current")  # noqa: F821
+    return spark.read.table(f"{CATALOG}.{SCHEMA}.context_current")  # noqa: F821
 
 
 @dp.materialized_view(name="top_sites_sdp", comment="Tranco top-1M by period from committed fetches.")

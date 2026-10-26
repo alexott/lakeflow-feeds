@@ -116,3 +116,17 @@ def test_retries_connection_errors():  # review #7
     responses.post(INSERT, json={})
     sink().write(TABLE, [{"v": 1}], fetch_id="f1", day=DAY)
     assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_sink_honors_retry_after_on_429():  # minor #13
+    responses.post(INSERT, status=429, headers={"Retry-After": "7"})
+    responses.post(INSERT, json={})
+    slept = []
+    ZerobusRestSink(EP, lambda t: "t", sleep=slept.append).write(TABLE, [{"v": 1}], fetch_id="f", day=DAY)
+    assert slept == [7.0]
+
+
+def test_zerobus_encode_naive_timestamp_is_utc_and_none_variant_is_null():  # minor #14
+    out = zerobus_encode({"fetched_at": "2026-10-26 00:00:00", "attrs": None, "payload": {"a": 1}})
+    assert out == {"fetched_at": 1792972800000000, "attrs": None, "payload": '{"a": 1}'}

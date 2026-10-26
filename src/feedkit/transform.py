@@ -94,12 +94,21 @@ def _cidr(v: Any) -> str | None:
         return None
 
 
+def _ip(v: Any) -> str | None:
+    try:
+        addr = ipaddress.ip_address(str(v).strip())
+    except ValueError:
+        return None
+    return None if addr.is_unspecified else addr.compressed
+
+
 _FUNCS: dict[str, Callable[[Any], Any]] = {
     "lower": lambda v: str(v).lower(),
     "upper": lambda v: str(v).upper(),
     "trim": lambda v: str(v).strip(),
     "strip_dots": lambda v: str(v).strip("."),
     "cidr_normalize": _cidr,
+    "ip_normalize": _ip,
     "to_timestamp": _to_timestamp,
 }
 

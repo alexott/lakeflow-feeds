@@ -80,13 +80,22 @@ _BUILD = build_deps
 ERROR_DIR = "/Volumes/cybersecurity/feeds/state/_errors"
 
 
-def _record_error(feed: str) -> None:
+def error_dir(registry_dir: str = "") -> str:
+    """<volume_root>/state/_errors from settings.yaml; the default path if settings can't be read."""
+    try:
+        return f"{load_settings(registry_path(registry_dir) / 'settings.yaml').volume_root}/state/_errors"
+    except Exception:
+        return ERROR_DIR
+
+
+def _record_error(feed: str, registry_dir: str = "") -> None:
     import os
     import traceback
     try:
-        os.makedirs(ERROR_DIR, exist_ok=True)
+        directory = error_dir(registry_dir)
+        os.makedirs(directory, exist_ok=True)
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%f")
-        with open(f"{ERROR_DIR}/{feed}-{stamp}.txt", "w") as f:
+        with open(f"{directory}/{feed}-{stamp}.txt", "w") as f:
             f.write(traceback.format_exc())
     except OSError:
         pass
@@ -117,7 +126,7 @@ def collect_feed(feed: str, registry_dir: str = "", force: bool = False) -> None
         outcome = run_feed(deps.spec, settings=deps.settings, storage=deps.storage, sink=deps.sink,
                            fetcher=deps.fetcher, now=_now(), force=force)
     except Exception:
-        _record_error(feed)
+        _record_error(feed, registry_dir)
         raise
     print(json.dumps({"feed": feed, **asdict(outcome)}, default=str))
 
@@ -135,7 +144,7 @@ class FeedChangedSensor(Sensor):
         try:
             return self._poll(ctx)
         except Exception:
-            _record_error(self.feed)
+            _record_error(self.feed, self.registry_dir)
             raise
 
     def _poll(self, ctx: Context) -> SensorResult:

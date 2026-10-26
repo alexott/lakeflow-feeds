@@ -22,7 +22,6 @@ transform:
   - filter: {regex_not: "^#"}
   - output: {value: line, observable_type: "'ip'"}
 validate: {min_records: 500}
-expiry: {max_age_days: 7}
 license: "Tor Project, public"
 """
 
@@ -119,3 +118,9 @@ def test_deletes_grammar(tmp_path, value, ok):  # review #6
     else:
         with pytest.raises(RegistryError, match="deletes"):
             load_feed(write(tmp_path, text))
+
+
+def test_expiry_only_for_merge_feeds(tmp_path):  # minor #10
+    with pytest.raises(RegistryError, match="expiry"):
+        load_feed(write(tmp_path, TOR + "expiry: {max_age_days: 7}\n"))  # replace feed with expiry
+    assert load_feed(write(tmp_path, TOR)).expiry.max_age_days is None

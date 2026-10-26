@@ -53,15 +53,18 @@ def _shown(fetch: Fetch) -> str:
     return f"uc-connection:{fetch.connection}/{(fetch.url or '').lstrip('/')}" if fetch.connection else fetch.url or ""
 
 
-def _retry_after(resp: requests.Response) -> float:
+def _retry_after(resp: requests.Response, default: float = 30.0) -> float:
     try:
-        return float(resp.headers.get("Retry-After", "60"))
-    except ValueError:
-        return 60.0
+        return float(resp.headers.get("Retry-After", default))
+    except ValueError:  # an HTTP-date Retry-After: treat as the default wait
+        return default
 
 
 def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None, host=None, auth_headers=None,
-          secret_lookup=None, sleep=time.sleep, attempts: int = 3, timeout: int = 300) -> FetchResult:
+          secret_lookup=None, sleep=time.sleep, attempts: int = 3, timeout: int = 300,
+          max_retry_after: float = 60.0) -> FetchResult:
+    """429 with a short Retry-After (<= max_retry_after) is retried within the attempt budget;
+    a longer wait raises RateLimited, so the job retry (or a sensor deferral) takes over."""
     session = session or requests
     url, headers = resolve(fetch, host=host, auth_headers=auth_headers, secret_lookup=secret_lookup)
     shown = _shown(fetch)
@@ -81,7 +84,12 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
         if resp.status_code == 304:
             return FetchResult(False, None, state.etag, state.last_modified, state.sha256, shown)
         if resp.status_code == 429:
-            raise RateLimited(_retry_after(resp))
+            wait = _retry_after(resp)
+            if wait > max_retry_after or attempt == attempts - 1:
+                raise RateLimited(wait)
+            last_error = f"HTTP 429 (retry after {wait:.0f}s)"
+            sleep(wait)
+            continue
         if resp.status_code >= 500:
             last_error = f"HTTP {resp.status_code}"
             sleep(2 ** attempt)

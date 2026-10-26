@@ -107,6 +107,8 @@ class FeedSpec(_Model):
             raise ValueError("mode: merge needs key")
         if self.history is not None and self.mode != "replace":
             raise ValueError("history is only allowed for mode: replace")
+        if self.expiry.max_age_days is not None and self.mode != "merge":
+            raise ValueError("expiry is only for mode: merge (replace/append current state is the latest commit)")
         if self.mode == "replace" and "datasource" in self.targets:
             raise ValueError("mode: replace feeds cannot target a datasource")
         if not self.license.strip():

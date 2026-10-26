@@ -8,6 +8,7 @@ resources:
       channel: CURRENT
       configuration:
         feeds.catalog: cybersecurity
+        feeds.schema: feeds
       libraries:
         - file:
             path: ../pipelines/feeds_curated/feeds_curated.py

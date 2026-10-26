@@ -4,15 +4,16 @@ CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.manifests_log
 SELECT * FROM read_files(
   '/Volumes/{{catalog}}/{{schema}}/manifests/',
   format => 'json', recursiveFileLookup => true,
-  schema => 'feed STRING, fetch_id STRING, status STRING, record_count BIGINT, raw_count BIGINT, source_url STRING, source_version STRING, transform_version STRING, started_at STRING, finished_at STRING, period STRING, forced BOOLEAN, reprocessed_from STRING');
+  schema => 'feed STRING, fetch_id STRING, status STRING, record_count BIGINT, raw_count BIGINT, source_url STRING, source_version STRING, transform_version STRING, started_at STRING, finished_at STRING, period STRING, forced BOOLEAN, reprocessed_from STRING, mode STRING, sha256 STRING');
 
 CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.committed_fetches
   COMMENT 'Fetches whose manifest is complete and whose rows all arrived.' AS
 WITH counts AS (
   SELECT fetch_id, count(DISTINCT record_no) AS n FROM {{catalog}}.{{raw_schema}}.records GROUP BY fetch_id
 )
-SELECT m.* FROM {{catalog}}.{{schema}}.manifests_log m JOIN counts c ON c.fetch_id = m.fetch_id
-WHERE m.status = 'complete' AND c.n = m.record_count;
+-- LEFT JOIN: an empty fetch (0 records) is a valid commit.
+SELECT m.* FROM {{catalog}}.{{schema}}.manifests_log m LEFT JOIN counts c ON c.fetch_id = m.fetch_id
+WHERE m.status = 'complete' AND coalesce(c.n, 0) = m.record_count;
 
 CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.records_committed
   COMMENT 'Rows of committed fetches, deduplicated on (fetch_id, record_no).' AS
@@ -23,17 +24,20 @@ QUALIFY row_number() OVER (PARTITION BY r.fetch_id, r.record_no ORDER BY r.fetch
 CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.context_current
   COMMENT 'Current context and indicators of all feeds, by ingest mode; no deleted or expired rows.' AS
 WITH rc AS (SELECT * FROM {{catalog}}.{{schema}}.records_committed),
-replace_cur AS (
-  SELECT * FROM rc WHERE mode = 'replace'
-  QUALIFY dense_rank() OVER (PARTITION BY feed ORDER BY fetched_at DESC, fetch_id DESC) = 1
+-- The latest committed fetch is chosen from the manifests, so an empty latest fetch clears the state.
+latest_fetch AS (
+  SELECT fetch_id FROM {{catalog}}.{{schema}}.committed_fetches WHERE period IS NULL
+  QUALIFY row_number() OVER (PARTITION BY feed ORDER BY started_at DESC, fetch_id DESC) = 1
 ),
-append_fetch AS (
-  SELECT * FROM rc WHERE mode = 'append'
-  QUALIFY dense_rank() OVER (PARTITION BY feed, period ORDER BY fetched_at DESC, fetch_id DESC) = 1
+replace_cur AS (
+  SELECT rc.* FROM rc JOIN latest_fetch l ON rc.fetch_id = l.fetch_id WHERE rc.mode = 'replace'
+),
+latest_period_fetch AS (
+  SELECT fetch_id FROM {{catalog}}.{{schema}}.committed_fetches WHERE period IS NOT NULL
+  QUALIFY row_number() OVER (PARTITION BY feed ORDER BY period DESC, started_at DESC, fetch_id DESC) = 1
 ),
 append_cur AS (
-  SELECT * FROM append_fetch
-  QUALIFY dense_rank() OVER (PARTITION BY feed ORDER BY period DESC) = 1
+  SELECT rc.* FROM rc JOIN latest_period_fetch l ON rc.fetch_id = l.fetch_id WHERE rc.mode = 'append'
 ),
 merge_cur AS (
   SELECT * FROM rc WHERE mode = 'merge'
@@ -51,3 +55,9 @@ SELECT feed, observable_type, value, min(fetched_at) AS first_seen, max(fetched_
        count(DISTINCT fetch_id) AS fetches
 FROM {{catalog}}.{{schema}}.records_committed
 GROUP BY feed, observable_type, value;
+
+CREATE OR REPLACE VIEW {{catalog}}.{{schema}}.feed_health
+  COMMENT 'Per feed: last committed fetch and number of committed fetches (staleness check).' AS
+SELECT feed, max(started_at) AS last_commit_at, max(period) AS last_period, count(*) AS fetches
+FROM {{catalog}}.{{schema}}.committed_fetches
+GROUP BY feed;

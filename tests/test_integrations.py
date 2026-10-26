@@ -116,7 +116,7 @@ def test_entry_point_failure_writes_traceback(tmp_path, monkeypatch):
         raise RuntimeError("boom in build")
 
     monkeypatch.setattr(integ, "_BUILD", broken_build)
-    monkeypatch.setattr(integ, "ERROR_DIR", str(tmp_path))
+    monkeypatch.setattr(integ, "error_dir", lambda registry_dir="": str(tmp_path))
     with pytest.raises(RuntimeError, match="boom"):
         integ.collect_feed("tor")
     with pytest.raises(RuntimeError, match="boom"):
@@ -140,3 +140,9 @@ def test_sensor_timeout_fails_when_the_feed_is_stale(wired, tmp_path, monkeypatc
     ctx.values["first_poll_at"] = (NOW - dt.timedelta(hours=13)).isoformat()
     with pytest.raises(integ.FeedStale, match="tor"):
         integ.FeedChangedSensor("tor", max_wait_hours=12, stale_after_days=2).poll(ctx)
+
+
+def test_error_dir_follows_settings_volume_root(tmp_path):  # minor #17
+    (tmp_path / "settings.yaml").write_text(f"volume_root: {tmp_path / 'vol'}\n")
+    assert integ.error_dir(str(tmp_path)) == str(tmp_path / "vol" / "state" / "_errors")
+    assert integ.error_dir(str(tmp_path / "missing")) == integ.ERROR_DIR

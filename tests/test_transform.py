@@ -187,3 +187,10 @@ def test_transform_version_is_stable_and_sensitive():
     b = [{"records": "lines"}, {"set": {"b": 2, "a": 1}}]
     assert transform_version(a) == transform_version(b) and len(transform_version(a)) == 12
     assert transform_version(a) != transform_version([{"records": "csv"}])
+
+
+def test_ip_normalize_drops_invalid_and_unspecified():  # minor #12
+    recs = [{"v": "1.2.3.4"}, {"v": "2A0B:F4C2::1"}, {"v": "1"}, {"v": "abc"}, {"v": "::"}, {"v": "0.0.0.0"},
+            {"v": "dead.beef"}]
+    out = run_steps([{"apply": {"v": ["ip_normalize"]}}, {"drop_if_empty": ["v"]}], recs)
+    assert [r["v"] for r in out] == ["1.2.3.4", "2a0b:f4c2::1"]

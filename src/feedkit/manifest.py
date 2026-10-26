@@ -23,6 +23,8 @@ class Manifest:
     period: str | None = None
     forced: bool = False
     reprocessed_from: str | None = None
+    mode: str | None = None
+    sha256: str | None = None
 
 
 def _dir(feed: str, period: str | None) -> str:
@@ -35,6 +37,16 @@ def manifest_path(m: Manifest) -> str:
 
 def write_manifest(storage: Storage, m: Manifest) -> None:
     storage.write_text(manifest_path(m), json.dumps(asdict(m), sort_keys=True))
+
+
+def latest_manifest(storage: Storage, feed: str) -> dict | None:
+    """Latest complete manifest of a non-period feed (fetch ids sort by time)."""
+    for name in sorted((n for n in storage.listdir(f"manifests/{feed}") if n.endswith(".json")), reverse=True):
+        text = storage.read_text(f"manifests/{feed}/{name}")
+        body = json.loads(text) if text else {}
+        if body.get("status") == "complete":
+            return body
+    return None
 
 
 def period_committed(storage: Storage, feed: str, period: date) -> bool:

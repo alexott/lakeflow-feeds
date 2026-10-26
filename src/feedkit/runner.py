@@ -9,7 +9,7 @@ from typing import Callable, Literal
 import jmespath
 
 from feedkit.http import FetchError, FetchResult, unzip_member
-from feedkit.manifest import Manifest, period_committed, write_manifest
+from feedkit.manifest import Manifest, latest_manifest, period_committed, write_manifest
 from feedkit.period import detect_period, period_from_metadata
 from feedkit.records import FetchInfo, new_fetch_id, normalized_row, raw_row, ts
 from feedkit.registry import FeedSpec
@@ -50,6 +50,16 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
         if not jmespath.search(spec.fetch.ok_when, doc):
             raise FetchError(f"{spec.name}: ok_when {spec.fetch.ok_when!r} is false: {result.content[:300]!r}")
 
+    if not force and spec.mode != "append":
+        last = latest_manifest(storage, spec.name)
+        if last and last.get("sha256") and last["sha256"] == result.sha256:
+            # Committed before, but the state write was lost: repair the state, do not duplicate the snapshot.
+            save_state(storage, spec.name, FeedState(
+                etag=result.etag, last_modified=result.last_modified, sha256=result.sha256, cursor=state.cursor,
+                last_record_count=last.get("record_count"), last_success_at=last.get("finished_at"),
+                last_period=state.last_period))
+            return RunOutcome("not_modified")
+
     content, zip_date = result.content, None
     if spec.fetch.format.startswith("zip+"):
         content, zip_date = unzip_member(content, spec.fetch.zip_member)
@@ -62,7 +72,11 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
         if not force and period_committed(storage, spec.name, period):
             return RunOutcome("period_exists", period=period)
 
-    check(spec, records, last_count=state.last_record_count, period_meta=period_meta, period_data=period,
+    period_data = period
+    if spec.mode == "append" and spec.period.source == "last_modified":
+        # The period comes from Last-Modified; cross-check it with the date inside the data (zip member).
+        period_meta, period_data = period, zip_date
+    check(spec, records, last_count=state.last_record_count, period_meta=period_meta, period_data=period_data,
           skip_change=force)
     info = FetchInfo(spec.name, new_fetch_id(spec.name, now), now, result.url,
                      result.etag or result.sha256, period)
@@ -76,7 +90,8 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
         feed=spec.name, fetch_id=info.fetch_id, status="complete", record_count=len(normalized),
         raw_count=len(raw), source_url=result.url, source_version=info.source_version,
         transform_version=transform_version(spec.transform), started_at=ts(now),
-        finished_at=ts(datetime.now(timezone.utc)), period=period.isoformat() if period else None, forced=force))
+        finished_at=ts(datetime.now(timezone.utc)), period=period.isoformat() if period else None, forced=force,
+        mode=spec.mode, sha256=result.sha256))
     save_state(storage, spec.name, FeedState(
         etag=result.etag, last_modified=result.last_modified, sha256=result.sha256, cursor=state.cursor,
         last_record_count=len(normalized), last_success_at=ts(now),

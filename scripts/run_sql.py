@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import time
 from pathlib import Path
 
 DEFAULTS = {"catalog": "cybersecurity", "raw_schema": "feeds_raw", "schema": "feeds"}
@@ -36,6 +37,7 @@ def main(argv=None) -> int:
     for stmt in render(Path(args.file).read_text(), params):
         r = w.statement_execution.execute_statement(statement=stmt, warehouse_id=args.warehouse, wait_timeout="50s")
         while r.status.state in (StatementState.PENDING, StatementState.RUNNING):
+            time.sleep(2)
             r = w.statement_execution.get_statement(r.statement_id)
         first = stmt.splitlines()[0][:100]
         if r.status.state != StatementState.SUCCEEDED:

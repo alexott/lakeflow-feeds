@@ -5,6 +5,7 @@ import argparse
 import io
 import json
 import sys
+import time
 from pathlib import Path
 
 from run_sql import render
@@ -46,6 +47,8 @@ ROWS = [
     row("mrg", "mrg-m2", "2026-10-02T00:00:00Z", "merge", 2, "8.8.8.8", key='["ip","k3"]', seq="2026-10-02T00:00:00Z",
         valid_until=PAST),
     row("mrg", "mrg-m3", "2026-10-03T00:00:00Z", "merge", 0, "10.0.0.1", key='["ip","k4"]', seq="2026-10-03T00:00:00Z"),
+    # replace feed whose latest committed fetch is empty -> nothing is current
+    row("rz", "rz-1", "2026-10-01T00:00:00Z", "replace", 0, "11.11.11.11"),
 ]
 
 MANIFESTS = {  # path under the manifests volume -> body
@@ -60,12 +63,16 @@ MANIFESTS = {  # path under the manifests volume -> body
     "mrg/mrg-m1.json": {"feed": "mrg", "fetch_id": "mrg-m1", "status": "complete", "record_count": 2},
     "mrg/mrg-m2.json": {"feed": "mrg", "fetch_id": "mrg-m2", "status": "complete", "record_count": 3},
     "mrg/mrg-m3.json": {"feed": "mrg", "fetch_id": "mrg-m3", "status": "complete", "record_count": 2},
+    "rz/rz-1.json": {"feed": "rz", "fetch_id": "rz-1", "status": "complete", "record_count": 1, "mode": "replace",
+                     "started_at": "2026-10-01T00:00:00.000000Z"},
+    "rz/rz-2.json": {"feed": "rz", "fetch_id": "rz-2", "status": "complete", "record_count": 0, "mode": "replace",
+                     "started_at": "2026-10-02T00:00:00.000000Z"},
 }
 
 CHECKS = [  # (description, SQL, expected rows as lists of strings)
     ("committed fetches exclude no-manifest and partial fetches",
      "SELECT fetch_id FROM {s}.committed_fetches ORDER BY fetch_id",
-     [["app-a1"], ["app-a2"], ["app-a3"], ["mrg-m1"], ["mrg-m2"], ["rep-f1"], ["rep-f2"]]),
+     [["app-a1"], ["app-a2"], ["app-a3"], ["mrg-m1"], ["mrg-m2"], ["rep-f1"], ["rep-f2"], ["rz-1"], ["rz-2"]]),
     ("duplicate deliveries count once",
      "SELECT count(*) FROM {s}.records_committed WHERE fetch_id = 'rep-f2'", [["1"]]),
     ("replace: only the latest committed fetch",
@@ -74,6 +81,10 @@ CHECKS = [  # (description, SQL, expected rows as lists of strings)
      "SELECT value, period FROM {s}.context_current WHERE feed = 'app'", [["5.5.5.5", "2026-10-02"]]),
     ("merge: newest sequence wins, deleted and expired are gone",
      "SELECT value FROM {s}.context_current WHERE feed = 'mrg' ORDER BY value", [["6.6.6.6"]]),
+    ("replace: an empty latest fetch clears the current state",
+     "SELECT count(*) FROM {s}.context_current WHERE feed = 'rz'", [["0"]]),
+    ("feed health counts committed fetches",
+     "SELECT feed, fetches FROM {s}.feed_health WHERE feed IN ('rep', 'rz') ORDER BY feed", [["rep", "2"], ["rz", "2"]]),
     ("history spans fetches",
      "SELECT fetches FROM {s}.context_history WHERE feed = 'rep' AND value = '1.1.1.1'", [["2"]]),
 ]
@@ -94,6 +105,7 @@ def main(argv=None) -> int:
     def sql(stmt):
         r = w.statement_execution.execute_statement(statement=stmt, warehouse_id=args.warehouse, wait_timeout="50s")
         while r.status.state in (StatementState.PENDING, StatementState.RUNNING):
+            time.sleep(2)
             r = w.statement_execution.get_statement(r.statement_id)
         if r.status.state != StatementState.SUCCEEDED:
             raise RuntimeError(f"{stmt[:120]}\n{r.status.error.message if r.status.error else r.status.state}")

@@ -80,7 +80,12 @@ def main(argv=None) -> int:
     ap.add_argument("--catalog", required=True)
     ap.add_argument("--schema", default="feeds")
     ap.add_argument("--warehouse", required=True)
+    ap.add_argument("--source-table", default="cybersecurity.feeds_raw.records",
+                    help="catalog.schema.table of the normalized records")
     args = ap.parse_args(argv)
+    source = tuple(args.source_table.split("."))
+    if len(source) != 3:
+        ap.error("--source-table must be catalog.schema.table")
 
     from databricks.sdk import WorkspaceClient
     w = WorkspaceClient(profile=args.profile)
@@ -88,7 +93,7 @@ def main(argv=None) -> int:
     spec_text = (HERE / "lakewatch/feeds_context.parser.yaml").read_text()
     pid, version = lw.ensure_parser("feeds_context", spec_text, "Lakeflow feeds generic IoC parser")
     ds = lw.ensure_datasource(datasource_body(
-        catalog=args.catalog, schema=args.schema, name="feeds_context", source=("cybersecurity", "feeds_raw", "records"),
+        catalog=args.catalog, schema=args.schema, name="feeds_context", source=source,
         parser_id=pid, version=version, target_table="feeds_context", warehouse_id=args.warehouse))
     print(json.dumps({"parser_id": pid, "version": version, "datasource": ds.get("datasource_id")}, indent=2))
     return 0
