@@ -23,7 +23,7 @@ Goals:
 
 Success criteria:
 
-- Adding a feed that uses an existing operator needs only one registry YAML file. No code.
+- Adding a feed that uses an existing operator needs only one registry YAML file, including its transforms (filter, explode, extract, map). Python is needed only for the escape hatch (§6.1).
 - A failed or bad fetch never replaces the last good snapshot.
 - An `append` feed never has two copies of the same period, even after a retry or a second run on the same day.
 - The top/new sites feeds run in parallel with the Lambda for at least 7 days, with matching daily counts.
@@ -90,7 +90,7 @@ Existing data on az-alexott:
   1. `get_all_ranges()` collects every provider in one run, and `safe_fetch()` swallows errors. So when one provider fails, its ranges silently disappear for that day. We make **one feed per provider**, each with its own validation and commit, and combine them in a view.
   2. Some sources need custom code: scraping the Microsoft service-tags page (with a `curl` User-Agent), Fivetran and Atlassian HTML, tags taken from ESET repository paths, CrowdStrike ranges built from DNS lookups. The registry needs `headers` and a **custom fetcher escape hatch** (§7).
   3. MISP warninglists and ESET come from a **branch archive** (`main.zip`), not from a release, and big lists (tranco, crux) are excluded. `github_repo` becomes `github_repo` with `ref: release | branch | tag` and `paths` / `exclude_paths`.
-  4. `SimpleCollector` covers many line feeds with `ignore_pattern` and a `match_pattern` regex (named groups become fields), plus static fields (`type`, `indicator_type`, `tags`). This goes into the registry `parse:` block for `format: lines`.
+  4. `SimpleCollector` covers many line feeds with `ignore_pattern` and a `match_pattern` regex (named groups become fields), plus static fields (`type`, `indicator_type`, `tags`). This becomes the `filter` / `extract` / `set` transform steps (§6.1).
   5. IP ranges: a later rewrite pre-builds a **disjoint range table**. Overlapping CIDRs are split into non-overlapping intervals that carry an array of providers. Each IP then matches at most one row, through one broadcast range join with a `range_join` bin hint. The benchmark (`notebooks/perf/cloud_ranges_disjoint_benchmark.py`) shows that building it once beats building it per query. The old `ip_min`/`ip_max` as `double` lose precision for IPv6.
   6. `install_threat_intel_views.py` builds **curated IoC views**: C2 domains minus allowlists, minus popular domains (the latest Tranco), minus eTLDs, with special handling of dynamic-DNS bases through `registered_domain`. This is the `effect` model (§4) applied to rules.
   7. `gold_domain_iocs.py` defines **domain suffix matching**: a host matches an IoC on itself or on any parent with at least two labels. `*.evil.com` matches strict subdomains only. The highest score wins, and the most specific suffix breaks ties.
@@ -132,11 +132,12 @@ Components, each with one purpose:
 | `feedkit.registry` | Load and validate feed YAML files | JSON schema |
 | `feedkit.state` | Read and write the per-feed state file | UC volume |
 | `feedkit.fetchers.*` | Fetch one source type and yield records + new state | HTTP, UC connections |
+| `feedkit.transform` | Run the declarative transform steps (or a custom function) on raw records | JMESPath, registry |
 | `feedkit.validate` | Pre-publish checks | state (last count) |
 | `feedkit.sinks.{zerobus,volume}` | Write records, then commit a manifest | Zerobus / volume |
 | `feedkit.integrations` | `@integration` wrappers that the Lakeflow UI shows | all of the above |
 | `scripts/gen_bundle.py` | Registry → bundle jobs | registry |
-| `scripts/gen_parsers.py` | Registry `parse:` → Lakewatch `parser.yaml` | registry |
+| `scripts/gen_parsers.py` | Registry `fields:` + `observable_type` → per-feed Lakewatch `parser.yaml`, and the one generic parser | registry |
 | `scripts/deploy_lakewatch.py` | Create and update datasources and parsers through REST | `lakewatch-api-v2` client |
 | `pipelines/feeds_curated` | SDP tier | raw tables, manifests |
 | `sql/` | Views tier, enrichment views, `feeds.lookup()`, cost view | raw or curated tables |
@@ -161,16 +162,14 @@ fetch:
 change_detection: etag       # etag | last_modified | content_hash | json_field | release | cursor
 schedule: {every: 1h}        # or {daily_after: "06:00", wait_until_available: 12h}
 sink: zerobus                # zerobus | volume
-normalize: true              # operator also emits the normalized record (§6)
 curation: views              # views | sdp
-targets: [tables, datasource]
-parse:                       # one declaration for the SDP parser and the Lakewatch parser.yaml
-  value: {field: line, type: string}
-  fields: []
-  ignore_pattern: '^#'       # format: lines (sirens SimpleCollector)
-  match_pattern: null        # regex with named groups → fields
-  static: {indicator_type: anonymizer_ip, tags: [tor]}
-  time: null                 # event-time field (merge feeds)
+targets: [tables]            # tables | datasource (replace feeds: tables only, §4.1)
+transform:                   # §6.1; runs in the operator, output = normalized records
+  - records: lines
+  - filter: {regex_not: '^#'}            # sirens SimpleCollector ignore_pattern
+  - set: {indicator_type: anonymizer_ip, tags: [tor]}
+  - output: {value: line, observable_type: ip_addresses}
+fields: []                   # optional typed raw fields; used only by per-feed Lakewatch parsers (§8.3)
 validate: {min_records: 500, max_change_pct: 50, canaries: []}
 expiry: {max_age_days: 7}
 license: "Tor Project, public"
@@ -223,8 +222,8 @@ The views tier uses window functions over the raw rows. That is cheap for small 
 **Validate first, then write.** Feeds are small (tens of MB at most):
 
 1. The operator fetches into memory or a local temp file, using a conditional GET. A 304 means no change, and the run ends.
-2. It parses into records, each with `fetch_id` and `record_no`.
-3. Pre-publish checks: the data parses, `min_records`, `max_change_pct` against the last count, and the canaries (for example `google.com` in Tranco).
+2. It splits the data into raw records, each with `fetch_id` and `record_no`, and runs the feed's transforms (§6.1) to get normalized records.
+3. Pre-publish checks, on the records **after** the transforms: the data parses, `min_records`, `max_change_pct` against the last count, and the canaries (for example `google.com` in Tranco).
 4. Only when the checks pass does it write the records to the sink. The volume sink writes to `_staging/` and then moves the file to `landing/`.
 5. Write the manifest (`status: complete`, record count, source version, timings), then update the state file.
 
@@ -249,7 +248,7 @@ The `feed_changed` sensor uses the same check: for daily lists it completes only
 
 `record_type` comes from sirens `_type`: `indicator`, `report`, `benign-indicator`, `range`. TAXII and IT-ISAC style feeds send reports and indicators in one fetch. `payload` is `VARIANT`, as in vuln-info-ingest. Zerobus can write `VARIANT` columns (confirmed by Alex, see the [Zerobus + VARIANT post](https://community.databricks.com/t5/technical-blog/schema-free-data-ingestion-with-zerobus-and-variant-type/ba-p/148399)). Through the REST API (Beta), the value is sent as a nested JSON object, not as a JSON string. Lines and CSV rows are wrapped as `{"line": ...}` or `{<column>: <value>, ...}`. The volume sink gets the same column through Auto Loader (`parse_json` on the line).
 
-**Normalized record.** Written when `normalize: true`, to the shared table `cybersecurity.feeds_raw.records`, clustered by `feed, fetch_id`:
+**Normalized record.** Always written (the output of the transforms, §6.1), to the shared table `cybersecurity.feeds_raw.records`, clustered by `feed, fetch_id`:
 
 `feed, fetch_id, fetched_at, mode, period DATE, record_key STRING, sequence TIMESTAMP, deleted BOOLEAN, category, effect, indicator_type, tlp, tags ARRAY<STRING>, score DOUBLE, observable_type, value, ip, domain, url, hash_md5, hash_sha1, hash_sha256, email, valid_from TIMESTAMP, valid_until TIMESTAMP, attrs VARIANT`
 
@@ -262,6 +261,56 @@ The `feed_changed` sensor uses the same check: for daily lists it completes only
 There is one typed column per observable kind (`ip`, `domain`, …), and the operator fills exactly one of them. This lets one generic Lakewatch parser declare each column with a fixed observable type (spike question S5). `value` repeats the filled one for generic joins.
 
 Normalizing in Python inside the operator is cheap for small feeds, and it removes the need for a parser per feed in the cheap tier.
+
+### 6.1 Per-feed transforms
+
+Many sources need reshaping before their records are useful. Examples: AWS `ip-ranges.json` (two arrays, with `effect` depending on `service`), a MISP warninglist file (one JSON file → one row per `list` value, and only some list types), GitHub `/meta` (a dict of arrays), ThreatFox (`ioc_type` values mapped to observable types), URLhaus (keep only some `url_status` values).
+
+**Where transforms run.** In the operator, in Python, between the split and the validation:
+
+```
+source bytes ─► split (records:) ─► raw records ─► transform steps ─► normalized records ─► validate ─► sinks
+                                    (written as-is,                    (written to
+                                     the replay source)                 feeds_raw.records)
+```
+
+- Validation counts what consumers really get.
+- All consumers see the same normalized records: views, SDP, and the generic Lakewatch datasource.
+- The raw record keeps the source unit **before** the transform. A fixed transform can be re-run from raw with `scripts/reprocess.py --feed <name> [--since <date>]`, with no new fetch. The new normalized rows get a new `fetch_id` that is linked to the original one, and readers pick them up through the normal "latest committed fetch" rule.
+- The manifest records `transform_version` (a hash of the `transform:` block).
+
+SQL in the curation tier stays for **analytic** shaping only (`top_sites_stable`, `curated_iocs`, disjoint ranges). Ingestion transforms are not done in SQL.
+
+**Declarative steps.** They run in order. Expressions are [JMESPath](https://jmespath.org/) (pure Python, works on JSON and on CSV rows as dicts) or Python regex. The step list is closed and small:
+
+| Step | Purpose | Example |
+|---|---|---|
+| `records` | split the source into raw records: `lines`, `csv`, `jsonl`, or a JMESPath to an array; several paths are concatenated | `records: ["prefixes[]", "ipv6_prefixes[]"]` |
+| `filter` | keep records where a JMESPath expression is true, or where a regex matches a line | `filter: "url_status == 'online'"` |
+| `explode` | one output record per element of a nested array or of a dict's items; the parent fields are kept under `parent` | `explode: {path: list, as: value}`; `explode: {items: "@", key_as: category, value_as: prefixes}` |
+| `extract` | new fields from JMESPath or from regex named groups | `extract: {ip: "ip_prefix \|\| ipv6_prefix"}`; `extract: {regex: {field: line, pattern: '^(?P<ip>[0-9.]+)'}}` |
+| `set` | constants and templates | `set: {indicator_type: c2_ip, tags: [feodo]}` |
+| `map` | value mapping through a table, with a default | `map: {field: ioc_type, to: observable_type, values: {ip:port: ip_addresses, domain: domains, url: urls, sha256_hash: hashes}, default: drop}` |
+| `case` | conditional value | `case: {to: effect, when: [{if: "service == 'CLOUDFRONT' \|\| service == 'S3'", then: allow}], else: enrich}` |
+| `apply` | fixed list of value functions: `lower`, `trim`, `strip_dots`, `regex_replace`, `split`, `cidr_normalize`, `ip_to_range`, `to_timestamp`, `registered_domain` (offline PSL, itself a feed) | `apply: {domain: [lower, strip_dots]}` |
+| `drop_if_empty` | drop records where required fields are missing | `drop_if_empty: [value]` |
+| `output` | map fields to the normalized record (`value`, `observable_type`, `valid_from`, `attrs`, …); not mapped fields go to `attrs` | `output: {value: ip, observable_type: ip_addresses, valid_from: first_seen_utc}` |
+
+Example, MISP warninglists (one `github_repo` feed, one raw record per list file):
+
+```yaml
+transform:
+  - records: "@"                       # each JSON file is one raw record
+  - filter: "contains(['cidr','hostname','string'], type) && !contains(['tranco','google-chrome-crux-1million'], parent_dir)"
+  - explode: {path: list, as: value}
+  - map: {field: type, to: observable_type, values: {cidr: ip_addresses, hostname: domains, string: domains}}
+  - set: {effect: enrich, record_type: benign-indicator}
+  - output: {value: value, observable_type: observable_type, attrs: {list_name: name, version: version}}
+```
+
+**Escape hatch.** `transform: {function: "feedkit.custom.<module>:<function>"}` gets the raw records and returns normalized records. Use it only when the steps can't express the logic, for example the HTML table parsing for Fivetran. Custom functions need a fixture test, like every declarative transform.
+
+**Lakewatch per-feed parsers.** A per-feed datasource reads **raw** records, so it works only for feeds where one raw record is one event (no `explode`). Feeds that use `explode` go to Lakewatch through the generic datasource over the normalized records. The registry validator enforces this.
 
 ## 7. Operators
 
@@ -307,7 +356,7 @@ SDP pipeline `feeds_curated` (serverless). It runs **one update for all `curatio
 |---|---|---|
 | raw | `feeds_raw.<feed>` or Auto Loader over `landing/` | raw record contract |
 | log | `feeds.fetch_log` | from manifests |
-| append | `feeds.periods_sdp` | committed fetches, one per `(feed, period)`, parsed with the registry `parse:` block |
+| append | `feeds.periods_sdp` | committed fetches, one per `(feed, period)`, read from the normalized records |
 | replace | `feeds.context_history_sdp` | AUTO CDC FROM SNAPSHOT → SCD2 per `(feed, observable_type, value)` (`history: scd2`), or a materialized view of the latest fetch |
 | ranges | `feeds.context_ranges` | CIDRs as `start_ip`/`end_ip` (IPv4 and IPv6; `DECIMAL(39,0)` or two `BIGINT`s, never `DOUBLE`) + `joinkey` bucket (IPinfo pattern) |
 | ranges | `feeds.context_ranges_disjoint` | non-overlapping intervals with `ARRAY<STRUCT<feed, provider, service, region, effect>>`, rebuilt only when a range feed commits (sirens lesson 5); one broadcast range join per query |
@@ -329,7 +378,7 @@ The enrichment views expose the same columns in both tiers, so consumers don't d
 There are two variants, and the spike measures both:
 
 - **Generic**: one datasource `feeds_context`, `existing_table` → `feeds_raw.records`, one generic parser over the normalized record. The typed observable columns map to `lw_observables`. Event time is `valid_from`, falling back to `fetched_at`. Adding a feed adds no Lakewatch cost.
-- **Per feed**: `existing_table` → `feeds_raw.<feed>` or `autoloader` → `landing/<feed>/`, with a parser generated from the registry `parse:` block (`scripts/gen_parsers.py`, following the lakewatch-parser-dev conventions).
+- **Per feed**: `existing_table` → `feeds_raw.<feed>` or `autoloader` → `landing/<feed>/`, with a parser generated from the registry `fields:` block (`scripts/gen_parsers.py`, following the lakewatch-parser-dev conventions).
 
 The default target is `merge` feeds. `append` feeds with event-like data (new domains) are allowed; the top-1M lists are not a default target. `replace` feeds are rejected (§4.1).
 
@@ -424,6 +473,7 @@ Panther mapping:
 ## 12. Testing
 
 - Unit tests, no network: fetchers against recorded fixtures (HTTP 200/304/429, zip, malformed input), the registry schema and validator rules, the pre-publish checks, the commit protocol with fake sinks (crash between write and manifest, duplicate delivery), the per-period guard (second run on the same day, forced reload), merge semantics (out-of-order `sequence_by`, tombstones, `absent_in_full_fetch`), replace semantics (a value disappears, then comes back), and state handling.
+- Per-feed transform tests: each feed has a fixture (a small sample of the real source) and the expected normalized records, so `pytest` checks every registry file. A changed `transform:` block without an updated expected output fails the test.
 - Golden tests for `gen_parsers.py` and `gen_bundle.py`.
 - On az-alexott: a smoke job per feed, SDP expectations, the `committed_fetches` logic against an injected bad fetch, and a parser preview in the Lakewatch UI (the preview API is UI-only).
 - Parallel-run comparison against the Lambda output (phase 1).
@@ -434,7 +484,7 @@ Panther mapping:
 lakeflow-feeds/
   pyproject.toml  databricks.yml  README.md
   src/feedkit/
-    registry.py  state.py  manifest.py  validate.py  records.py
+    registry.py  state.py  manifest.py  validate.py  records.py  transform.py
     sinks/{zerobus.py, volume.py}
     fetchers/{http_snapshot.py, feed_changed.py, github_repo.py, rest_paginated.py, taxii21.py, dns_derive.py}
     custom/              # escape-hatch fetchers (microsoft_service_tags.py, fivetran.py, ...)
@@ -443,7 +493,7 @@ lakeflow-feeds/
   parsers/               # generated parser.yaml files
   pipelines/feeds_curated/
   sql/                   # views tier, enrichment views, lookup TVF, cost view
-  scripts/{gen_bundle.py, gen_parsers.py, deploy_lakewatch.py}
+  scripts/{gen_bundle.py, gen_parsers.py, deploy_lakewatch.py, reprocess.py}
   tests/
 ```
 
