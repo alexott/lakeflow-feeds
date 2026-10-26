@@ -1,0 +1,29 @@
+name: feodo_ipblocklist
+mode: merge
+key: [observable_type, value]
+sequence_by: last_online
+category: ioc
+effect: block
+observable_type: ip
+fetch:
+  operator: http_snapshot
+  url: https://feodotracker.abuse.ch/downloads/ipblocklist.csv
+  format: csv
+change_detection: etag
+schedule: {every: 1h}
+sink: zerobus
+curation: views
+targets: [tables, datasource]
+transform:
+  - records: {csv: {comment: "#"}}
+  - apply: {first_seen_utc: [to_timestamp], last_online: [to_timestamp]}
+  - set: {indicator_type: c2_ip}
+  - output:
+      value: dst_ip
+      indicator_type: indicator_type
+      valid_from: first_seen_utc
+      tags: "[malware]"
+      attrs: {port: dst_port, c2_status: c2_status, last_online: last_online, malware: malware}
+validate: {min_records: 1, max_change_pct: 500}
+expiry: {max_age_days: 90}
+license: "abuse.ch Feodo Tracker, CC0 (https://feodotracker.abuse.ch/blocklist/)"

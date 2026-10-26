@@ -1,0 +1,23 @@
+name: tranco_top1m
+mode: append
+period: {source: last_modified}
+category: top_sites
+effect: enrich
+observable_type: domain
+fetch:
+  operator: http_snapshot
+  url: https://tranco-list.eu/top-1m.csv.zip
+  format: zip+csv
+  zip_member: top-1m.csv
+change_detection: last_modified
+schedule: {daily_after: "06:00", wait_until_available: 12h}
+sink: zerobus
+curation: sdp
+targets: [tables]
+transform:
+  - records: {csv: {fieldnames: [rank, domain]}}
+  - apply: {domain: [trim, lower, strip_dots]}
+  - drop_if_empty: [domain]
+  - output: {value: domain, attrs: {rank: "to_number(rank)"}}
+validate: {min_records: 900000, canaries: [google.com, cloudflare.com]}
+license: "Tranco list, CC BY 4.0 (https://tranco-list.eu)"

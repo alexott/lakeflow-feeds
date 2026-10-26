@@ -1,0 +1,23 @@
+name: tor_exit_nodes
+mode: replace
+history: {type: snapshots, retain_days: 90}
+category: anonymizer
+effect: enrich
+observable_type: ip
+fetch:
+  operator: http_snapshot
+  url: https://check.torproject.org/torbulkexitlist
+  format: lines
+change_detection: etag
+schedule: {every: 1h}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  - records: lines
+  - filter: {regex: '^[0-9A-Fa-f:.]+$'}  # IPs only; an HTML block page yields 0 records and fails min_records
+  - set: {indicator_type: anonymizer_ip, tags: [tor]}
+  - output: {value: line, indicator_type: indicator_type, tags: tags, attrs: {}}
+validate: {min_records: 500}
+expiry: {max_age_days: 7}
+license: "Tor Project, public data"

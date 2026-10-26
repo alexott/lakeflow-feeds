@@ -1,0 +1,61 @@
+[
+ {
+  "attrs": {
+   "confidence_level": 100,
+   "ioc_id": "1612345",
+   "ioc_type": "ip:port",
+   "last_seen": null,
+   "malpedia": "https://malpedia.caad.fkie.fraunhofer.de/details/win.qakbot",
+   "malware": "QakBot",
+   "port": "443",
+   "reference": null,
+   "reporter": "abuse_ch"
+  },
+  "indicator_type": "botnet_cc",
+  "observable_type": "ip",
+  "tags": [
+   "qakbot"
+  ],
+  "valid_from": "2026-10-25T21:03:14.000000Z",
+  "value": "45.137.21.9"
+ },
+ {
+  "attrs": {
+   "confidence_level": 75,
+   "ioc_id": "1612346",
+   "ioc_type": "domain",
+   "last_seen": "2026-10-26T01:00:00.000000Z",
+   "malpedia": null,
+   "malware": "SocGholish",
+   "port": null,
+   "reference": "https://example.org/report",
+   "reporter": "researcher1"
+  },
+  "indicator_type": "payload_delivery",
+  "observable_type": "domain",
+  "tags": [
+   "socgholish",
+   "fakeupdates"
+  ],
+  "valid_from": "2026-10-25T22:10:00.000000Z",
+  "value": "login-micros0ft.example"
+ },
+ {
+  "attrs": {
+   "confidence_level": 100,
+   "ioc_id": "1612347",
+   "ioc_type": "sha256_hash",
+   "last_seen": null,
+   "malpedia": null,
+   "malware": "Lumma Stealer",
+   "port": null,
+   "reference": null,
+   "reporter": "abuse_ch"
+  },
+  "indicator_type": "payload",
+  "observable_type": "hash",
+  "tags": null,
+  "valid_from": "2026-10-26T00:30:00.000000Z",
+  "value": "0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9"
+ }
+]

@@ -1,0 +1,26 @@
+[
+ {
+  "attrs": {},
+  "indicator_type": "anonymizer_ip",
+  "tags": [
+   "tor"
+  ],
+  "value": "185.220.101.1"
+ },
+ {
+  "attrs": {},
+  "indicator_type": "anonymizer_ip",
+  "tags": [
+   "tor"
+  ],
+  "value": "185.220.101.2"
+ },
+ {
+  "attrs": {},
+  "indicator_type": "anonymizer_ip",
+  "tags": [
+   "tor"
+  ],
+  "value": "2a0b:f4c2::1"
+ }
+]

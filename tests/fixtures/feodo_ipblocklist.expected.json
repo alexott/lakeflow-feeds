@@ -1,0 +1,72 @@
+[
+ {
+  "attrs": {
+   "c2_status": "offline",
+   "last_online": "2026-03-07T00:00:00.000000Z",
+   "malware": "Emotet",
+   "port": "8080"
+  },
+  "indicator_type": "c2_ip",
+  "tags": [
+   "Emotet"
+  ],
+  "valid_from": "2022-06-04T21:24:53.000000Z",
+  "value": "162.243.103.246"
+ },
+ {
+  "attrs": {
+   "c2_status": "online",
+   "last_online": "2026-03-12T00:00:00.000000Z",
+   "malware": "QakBot",
+   "port": "443"
+  },
+  "indicator_type": "c2_ip",
+  "tags": [
+   "QakBot"
+  ],
+  "valid_from": "2025-12-30T13:56:31.000000Z",
+  "value": "50.16.16.211"
+ },
+ {
+  "attrs": {
+   "c2_status": "offline",
+   "last_online": "2026-03-01T00:00:00.000000Z",
+   "malware": "QakBot",
+   "port": "443"
+  },
+  "indicator_type": "c2_ip",
+  "tags": [
+   "QakBot"
+  ],
+  "valid_from": "2026-01-13T21:41:15.000000Z",
+  "value": "34.204.119.63"
+ },
+ {
+  "attrs": {
+   "c2_status": "offline",
+   "last_online": "2026-02-18T00:00:00.000000Z",
+   "malware": "QakBot",
+   "port": "443"
+  },
+  "indicator_type": "c2_ip",
+  "tags": [
+   "QakBot"
+  ],
+  "valid_from": "2026-02-17T05:41:23.000000Z",
+  "value": "178.62.3.223"
+ },
+ {
+  "attrs": {
+   "c2_status": "offline",
+   "last_online": "2026-03-05T00:00:00.000000Z",
+   "malware": "QakBot",
+   "port": "443"
+  },
+  "indicator_type": "c2_ip",
+  "tags": [
+   "QakBot"
+  ],
+  "valid_from": "2026-03-04T14:28:39.000000Z",
+  "value": "27.133.154.218"
+ }
+]

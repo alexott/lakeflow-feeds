@@ -1,0 +1,49 @@
+name: threatfox_recent
+mode: merge
+key: [observable_type, value]
+sequence_by: last_seen
+category: ioc
+effect: block
+fetch:
+  operator: http_snapshot
+  url: https://threatfox-api.abuse.ch/api/v1/
+  format: json
+  method: POST
+  body: {query: get_iocs, days: 1}
+  # S4: try a UC HTTP connection first; this secret-scope header is the fallback.
+  secret_headers: {Auth-Key: abusech/auth_key}
+  # HTTP 200 with an error status (bad key) must fail; an empty window ("no_result") is fine.
+  ok_when: "query_status == 'ok' || query_status == 'no_result'"
+change_detection: none
+schedule: {every: 1h}
+sink: zerobus
+curation: views
+targets: [tables, datasource]
+transform:
+  - records: "data[]"
+  - extract: {regex: {field: ioc, pattern: '^(?P<ip>\d{1,3}(?:\.\d{1,3}){3}):(?P<port>\d+)$'}}
+  - map:
+      field: ioc_type
+      to: observable_type
+      values: {"ip:port": ip, domain: domain, url: url, md5_hash: hash, sha1_hash: hash, sha256_hash: hash}
+      default: drop
+  - apply: {first_seen: [to_timestamp], last_seen: [to_timestamp]}
+  - output:
+      value: "ip || ioc"
+      observable_type: observable_type
+      indicator_type: threat_type
+      valid_from: first_seen
+      tags: tags
+      attrs:
+        ioc_id: id
+        ioc_type: ioc_type
+        port: port
+        malware: malware_printable
+        malpedia: malware_malpedia
+        confidence_level: confidence_level
+        last_seen: last_seen
+        reporter: reporter
+        reference: reference
+validate: {min_records: 0, max_change_pct: 500}
+expiry: {max_age_days: 90}
+license: "abuse.ch ThreatFox, CC0 (https://threatfox.abuse.ch/faq/)"

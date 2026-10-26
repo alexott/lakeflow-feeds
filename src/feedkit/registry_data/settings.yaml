@@ -1,0 +1,10 @@
+# Deployment settings for az-alexott. No secrets here.
+catalog: cybersecurity
+raw_schema: feeds_raw
+volume_root: /Volumes/cybersecurity/feeds
+# Zerobus REST endpoint; the exact host form is verified in the spike (S2/S7).
+zerobus_endpoint: https://6688808130562317.zerobus.westeurope.azuredatabricks.net
+zerobus_batch_size: 1000
+workspace_id: "6688808130562317"
+# Secret scope with sp_client_id / sp_client_secret of the feeds-collector service principal (Task 14).
+sp_secret_scope: feeds
