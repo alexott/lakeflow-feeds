@@ -1,0 +1,40 @@
+# Lakeflow feeds bundle (from the lakeflow-integrations template).
+bundle:
+  name: lakeflow_feeds
+  engine: direct
+
+include:
+  - resources/*.yml
+
+variables:
+  sp_application_id:
+    description: Application (client) id of the feeds-collector service principal.
+
+artifacts:
+  python_artifact:
+    type: whl
+    build: uv build --wheel
+  lakeflow_integrations_yaml:
+    build: >
+      uv run python -c "import shutil;
+      shutil.rmtree('__generated__', ignore_errors=True);
+      from databricks.lakeflow.integrations.generator.generate import main;
+      main([
+        '--package-module', 'feedkit',
+        '--output-dir', '__generated__',
+        '--environment-version', '5',
+        '--environment-key', 'feeds_environment',
+        '--dependency', '${workspace.artifact_path}/.internal/feedkit-0.1.0-py3-none-any.whl',
+      ])"
+    files:
+      - {"source": "__generated__/*.yml"}
+
+targets:
+  spike:
+    # No development mode: it would force-pause the schedules, and the spike needs them running.
+    default: true
+    presets:
+      name_prefix: "[spike] "
+    workspace:
+      host: https://adb-6688808130562317.17.azuredatabricks.net
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}

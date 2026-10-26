@@ -1,0 +1,109 @@
+x-env: &env
+  environments:
+    - environment_key: feeds_environment
+      spec:
+        environment_version: "5"
+        dependencies:
+          - ../dist/*.whl
+
+x-run-as: &run_as
+  run_as:
+    service_principal_name: ${var.sp_application_id}
+
+resources:
+  jobs:
+    feeds_probe:
+      name: "feeds probe"
+      <<: [*env, *run_as]
+      parameters:
+        - {name: connection, default: ""}
+      tasks:
+        - task_key: probe
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.probe.probe_runtime
+            parameters:
+              - {name: connection, value: "{{job.parameters.connection}}"}
+
+    feed_tor_exit_nodes:
+      name: "feed tor_exit_nodes"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: tor_exit_nodes}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 7 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: tor_exit_nodes}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_feodo_ipblocklist:
+      name: "feed feodo_ipblocklist"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: feodo_ipblocklist}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 17 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: feodo_ipblocklist}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_threatfox_recent:
+      name: "feed threatfox_recent"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: threatfox_recent}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 27 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: threatfox_recent}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_tranco_top1m:
+      name: "feed tranco_top1m"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: tranco_top1m}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 0 6 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: wait
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.FeedChangedSensor
+            parameters:
+              - {name: feed, value: tranco_top1m}
+              - {name: poll_minutes, value: "30"}
+              - {name: max_wait_hours, value: "12"}
+        - task_key: changed
+          depends_on: [{task_key: wait}]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.wait.values.changed}}"
+            right: "true"
+        - task_key: collect
+          depends_on: [{task_key: changed, outcome: "true"}]
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: tranco_top1m}
+              - {name: force, value: "{{job.parameters.force}}"}
