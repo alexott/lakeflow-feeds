@@ -1,0 +1,47 @@
+{
+ "query_status": "ok",
+ "payloads": [
+  {
+   "md5_hash": "34191c8d7788c7c29c7e16073d0f00ea",
+   "sha256_hash": "642c2d7d3f3184c4b2d5c6d6b207f98c300dc2f24091ef3a89e03f8ffc4a2274",
+   "file_type": "zip",
+   "file_size": 8692955,
+   "signature": null,
+   "firstseen": "2026-10-26 11:55:15",
+   "urlhaus_download": "https://urlhaus-api.abuse.ch/v1/download/642c2d7d3f3184c4b2d5c6d6b207f98c300dc2f24091ef3a89e03f8ffc4a2274/",
+   "virustotal": null,
+   "imphash": null,
+   "ssdeep": "196608:ZSgHq+PXV+IkZxM3umsjCiDEFwNuYJkVi2HBqIvWYlJAqsaWgjF2V5X+sK9denfF:ZTq+vVOI3OuiAKNuYUhlJXsaWgjFeR+6",
+   "tlsh": "T1989633B6410D1EBDDF1743B95D84324C122649CEBD6BA63126813ED8E6F8E782FB45",
+   "magika": "zip"
+  },
+  {
+   "md5_hash": "59ce0baba11893f90527fc951ac69912",
+   "sha256_hash": "4293c1d8574dc87c58360d6bac3daa182f64f7785c9d41da5e0741d2b1817fc7",
+   "file_type": "elf",
+   "file_size": 135784,
+   "signature": "Mozi",
+   "firstseen": "2026-10-26 11:50:12",
+   "urlhaus_download": "https://urlhaus-api.abuse.ch/v1/download/4293c1d8574dc87c58360d6bac3daa182f64f7785c9d41da5e0741d2b1817fc7/",
+   "virustotal": null,
+   "imphash": null,
+   "ssdeep": "3072:phNlHuBafLeBtfCzpta8xlBIOdVo3/4sxLJ10xioP:p3lOYoaja8xzx/0wsxzSi2",
+   "tlsh": "E5D3128BEF36DC1ECF001EB226DA5B9E9C6D756B41CBF0A4B9C1818F13A01C97D52215",
+   "magika": null
+  },
+  {
+   "md5_hash": "59ce0baba11893f90527fc951ac69912",
+   "sha256_hash": "4293c1d8574dc87c58360d6bac3daa182f64f7785c9d41da5e0741d2b1817fc7",
+   "file_type": "elf",
+   "file_size": 135784,
+   "signature": "Mozi",
+   "firstseen": "2026-10-26 11:47:06",
+   "urlhaus_download": "https://urlhaus-api.abuse.ch/v1/download/4293c1d8574dc87c58360d6bac3daa182f64f7785c9d41da5e0741d2b1817fc7/",
+   "virustotal": null,
+   "imphash": null,
+   "ssdeep": "3072:phNlHuBafLeBtfCzpta8xlBIOdVo3/4sxLJ10xioP:p3lOYoaja8xzx/0wsxzSi2",
+   "tlsh": "E5D3128BEF36DC1ECF001EB226DA5B9E9C6D756B41CBF0A4B9C1818F13A01C97D52215",
+   "magika": null
+  }
+ ]
+}

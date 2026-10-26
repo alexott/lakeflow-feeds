@@ -44,4 +44,17 @@ CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.threatfox_recent (
   record_no BIGINT, record_type STRING, payload VARIANT
 ) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed threatfox_recent (replay source).';
 
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.urlhaus_urls (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed urlhaus_urls (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.urlhaus_payloads (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed urlhaus_payloads (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.malwarebazaar_recent (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed malwarebazaar_recent (replay source).';
+
 SHOW TABLES IN {{catalog}}.{{raw_schema}};

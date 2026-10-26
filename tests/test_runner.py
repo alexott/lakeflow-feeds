@@ -249,3 +249,15 @@ def test_crash_between_manifest_and_state_does_not_duplicate(tmp_path):  # minor
     out = run(tor_spec(change_detection="none"), storage, sink, FakeFetcher(ok(lines(3), etag=None)))
     assert out.status == "not_modified" and sink.writes == [] and len(manifests(tmp_path, "tor")) == 1
     assert load_state(storage, "tor").sha256 == hashlib.sha256(lines(3)).hexdigest()  # state repaired
+
+
+def test_cursor_is_saved_only_after_a_commit(tmp_path):
+    storage = PathStorage(tmp_path)
+    spec = tor_spec(change_detection="none", validate={"min_records": 1})
+    res = ok(lines(2)); res.cursor = "2026-10-26T12:00:00+00:00"
+    run(spec, storage, MemorySink(), FakeFetcher(res))
+    assert load_state(storage, "tor").cursor == "2026-10-26T12:00:00+00:00"
+    bad = ok(b""); bad.cursor = "2026-10-26T13:00:00+00:00"
+    with pytest.raises(ValidationFailed):
+        run(spec, storage, MemorySink(), FakeFetcher(bad))
+    assert load_state(storage, "tor").cursor == "2026-10-26T12:00:00+00:00"

@@ -25,13 +25,28 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+class Pagination(_Model):
+    next: str  # JMESPath to the next-page URL in each response (null/empty = last page)
+    records: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")  # key of the item list; pages are concatenated under it
+    max_pages: int = 50
+
+
+class Cursor(_Model):
+    param: str  # query parameter that takes the cursor (ISO-8601), e.g. modified_since
+    first_lookback_hours: int = 24
+    overlap_minutes: int = 60
+
+
 class Fetch(_Model):
     operator: Literal["http_snapshot", "github_repo", "rest_paginated", "taxii21_poll", "custom", "dns_derive"]
     url: str | None = None
     format: Literal["lines", "csv", "json", "jsonl", "zip+csv", "zip+lines", "stix"] = "lines"
     zip_member: str | None = None
     method: Literal["GET", "POST"] = "GET"
-    body: dict[str, Any] | None = None  # JSON body for POST APIs (ThreatFox get_iocs)
+    body: dict[str, Any] | None = None  # request body for POST APIs (ThreatFox get_iocs)
+    body_format: Literal["json", "form"] = "json"  # form: application/x-www-form-urlencoded (MalwareBazaar)
+    pagination: Pagination | None = None
+    cursor: Cursor | None = None
     connection: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)  # values may hold {{secrets/<scope>/<key>}} references
     ok_when: str | None = None  # JMESPath on the JSON response; false -> the fetch fails (API error bodies with HTTP 200)

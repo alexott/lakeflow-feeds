@@ -160,3 +160,63 @@ def test_429_without_retry_after_waits_a_short_default():  # minor #13
     slept = []
     assert fetch(F, "none", FeedState(), sleep=slept.append, max_retry_after=60).content == b"ok"
     assert slept == [30.0]
+
+
+# --- form bodies, cursor, pagination (filebeat threatintel parity) ------------------------------
+
+import datetime as _dt
+import json as _json
+
+API = "https://api.example.test/v1/export"
+NOW = _dt.datetime(2026, 10, 26, 12, 0, tzinfo=_dt.timezone.utc)
+
+
+@responses.activate
+def test_form_body():
+    responses.post(API, json={"query_status": "ok", "data": []},
+                   match=[responses.matchers.urlencoded_params_matcher({"query": "get_recent", "selector": "time"})])
+    f = Fetch(operator="http_snapshot", url=API, format="json", method="POST", body_format="form",
+              body={"query": "get_recent", "selector": "time"})
+    assert fetch(f, "none", FeedState()).changed
+
+
+def cursor_fetch(**over):
+    base = dict(operator="http_snapshot", url=API, format="json",
+                cursor={"param": "modified_since", "first_lookback_hours": 400, "overlap_minutes": 60},
+                pagination={"next": "next", "records": "results", "max_pages": 3})
+    base.update(over)
+    return Fetch(**base)
+
+
+@responses.activate
+def test_cursor_first_run_uses_lookback_and_returns_new_cursor():
+    responses.get(API, json={"results": [{"i": 1}], "next": None},
+                  match=[responses.matchers.query_param_matcher({"modified_since": "2026-10-09T20:00:00+00:00"})])
+    r = fetch(cursor_fetch(), "none", FeedState(), now=NOW)
+    assert r.cursor == "2026-10-26T12:00:00+00:00"
+    assert _json.loads(r.content) == {"results": [{"i": 1}]}
+
+
+@responses.activate
+def test_cursor_next_run_starts_at_saved_cursor_minus_overlap():
+    responses.get(API, json={"results": [], "next": None},
+                  match=[responses.matchers.query_param_matcher({"modified_since": "2026-10-26T10:00:00+00:00"})])
+    fetch(cursor_fetch(), "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW)
+
+
+@responses.activate
+def test_pagination_follows_next_and_concatenates():
+    responses.get(API, json={"results": [{"i": 1}, {"i": 2}], "next": API + "?page=2"},
+                  match=[responses.matchers.query_param_matcher({"modified_since": "2026-10-26T10:00:00+00:00"})])
+    responses.get(API + "?page=2", json={"results": [{"i": 3}], "next": None})
+    r = fetch(cursor_fetch(), "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW)
+    assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}, {"i": 3}]}
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_pagination_over_max_pages_fails_so_the_cursor_does_not_advance():
+    for p in range(1, 5):
+        responses.get(API if p == 1 else f"{API}?page={p}", json={"results": [{"i": p}], "next": f"{API}?page={p + 1}"})
+    with pytest.raises(FetchError, match="max_pages"):
+        fetch(cursor_fetch(), "none", FeedState(), now=NOW)

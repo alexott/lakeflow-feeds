@@ -65,6 +65,66 @@ resources:
               - {name: registry_dir, value: "${workspace.file_path}/registry"}
               - {name: force, value: "{{job.parameters.force}}"}
 
+    feed_urlhaus_urls:
+      name: "feed urlhaus_urls"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: urlhaus_urls}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 37 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: urlhaus_urls}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_urlhaus_payloads:
+      name: "feed urlhaus_payloads"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: urlhaus_payloads}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 42 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: urlhaus_payloads}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_malwarebazaar_recent:
+      name: "feed malwarebazaar_recent"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: malwarebazaar_recent}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 47 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: malwarebazaar_recent}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
     feed_threatfox_recent:
       name: "feed threatfox_recent"
       <<: [*env, *run_as]

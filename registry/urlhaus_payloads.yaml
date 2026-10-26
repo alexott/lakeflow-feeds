@@ -1,0 +1,37 @@
+name: urlhaus_payloads
+mode: merge
+key: [observable_type, value]
+sequence_by: firstseen
+category: ioc
+effect: block
+observable_type: hash
+fetch:
+  operator: http_snapshot
+  url: https://urlhaus-api.abuse.ch/v1/payloads/recent/
+  format: json
+  headers: {Auth-Key: "{{secrets/abusech/auth_key}}"}
+  ok_when: "query_status == 'ok' || query_status == 'no_results'"
+change_detection: none
+schedule: {every: 1h}
+sink: zerobus
+curation: views
+targets: [tables, datasource]
+transform:
+  - records: "payloads[]"
+  - apply: {firstseen: [to_timestamp]}
+  # One raw payload -> one hash row per exact hash; fuzzy hashes stay in attrs.
+  - extract: {hashes: "[{hash_type: 'md5', value: md5_hash}, {hash_type: 'sha256', value: sha256_hash}]"}
+  - explode: {path: hashes, as: h}
+  - extract: {hash_value: "h.value", hash_type: "h.hash_type"}
+  - drop_if_empty: [hash_value]
+  - set: {indicator_type: malware_payload}
+  - output:
+      value: hash_value
+      indicator_type: indicator_type
+      valid_from: firstseen
+      attrs: {hash_type: hash_type, md5: md5_hash, sha256: sha256_hash, ssdeep: ssdeep, tlsh: tlsh,
+              imphash: imphash, file_type: file_type, file_size: file_size, signature: signature,
+              download: urlhaus_download, virustotal: virustotal, firstseen: firstseen}
+validate: {min_records: 0, max_change_pct: 1000}
+expiry: {max_age_days: 90}
+license: "abuse.ch URLhaus, CC0 (https://urlhaus.abuse.ch/api/)"

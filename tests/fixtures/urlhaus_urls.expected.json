@@ -1,0 +1,69 @@
+[
+ {
+  "attrs": {
+   "blacklists": {
+    "spamhaus_dbl": "not listed",
+    "surbl": "not listed"
+   },
+   "date_added": "2026-10-26T11:50:12.000000Z",
+   "host": "125.43.22.51",
+   "larted": "true",
+   "reference": "https://urlhaus.abuse.ch/url/4029893/",
+   "reporter": "wristhulk",
+   "threat": "malware_download",
+   "url_status": "online",
+   "urlhaus_id": 4029893
+  },
+  "indicator_type": "malware_download",
+  "tags": [
+   "elf"
+  ],
+  "valid_from": "2026-10-26T11:50:12.000000Z",
+  "value": "http://125.43.22.51:60373/i"
+ },
+ {
+  "attrs": {
+   "blacklists": {
+    "spamhaus_dbl": "not listed",
+    "surbl": "not listed"
+   },
+   "date_added": "2026-10-26T11:47:06.000000Z",
+   "host": "42.224.99.225",
+   "larted": "true",
+   "reference": "https://urlhaus.abuse.ch/url/4029892/",
+   "reporter": "adliwahid",
+   "threat": "malware_download",
+   "url_status": "online",
+   "urlhaus_id": 4029892
+  },
+  "indicator_type": "malware_download",
+  "tags": null,
+  "valid_from": "2026-10-26T11:47:06.000000Z",
+  "value": "http://42.224.99.225:56359/i"
+ },
+ {
+  "attrs": {
+   "blacklists": {
+    "spamhaus_dbl": "not listed",
+    "surbl": "not listed"
+   },
+   "date_added": "2026-10-26T11:40:15.000000Z",
+   "host": "115.57.229.137",
+   "larted": "true",
+   "reference": "https://urlhaus.abuse.ch/url/4029891/",
+   "reporter": "geenensp",
+   "threat": "malware_download",
+   "url_status": "online",
+   "urlhaus_id": 4029891
+  },
+  "indicator_type": "malware_download",
+  "tags": [
+   "32-bit",
+   "elf",
+   "mips",
+   "Mozi"
+  ],
+  "valid_from": "2026-10-26T11:40:15.000000Z",
+  "value": "http://115.57.229.137:51898/i"
+ }
+]

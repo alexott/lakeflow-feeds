@@ -124,3 +124,9 @@ def test_expiry_only_for_merge_feeds(tmp_path):  # minor #10
     with pytest.raises(RegistryError, match="expiry"):
         load_feed(write(tmp_path, TOR + "expiry: {max_age_days: 7}\n"))  # replace feed with expiry
     assert load_feed(write(tmp_path, TOR)).expiry.max_age_days is None
+
+
+def test_pagination_records_must_be_a_plain_key(tmp_path):
+    text = mutate(TOR, 'format: lines}', 'format: json, pagination: {next: next, records: "results[]"}}')
+    with pytest.raises(RegistryError, match="records"):
+        load_feed(write(tmp_path, text))

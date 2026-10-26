@@ -1,0 +1,31 @@
+name: urlhaus_urls
+mode: merge
+key: [observable_type, value]
+sequence_by: date_added
+category: ioc
+effect: block
+observable_type: url
+fetch:
+  operator: http_snapshot
+  url: https://urlhaus-api.abuse.ch/v1/urls/recent/
+  format: json
+  headers: {Auth-Key: "{{secrets/abusech/auth_key}}"}
+  ok_when: "query_status == 'ok' || query_status == 'no_results'"
+change_detection: none
+schedule: {every: 1h}
+sink: zerobus
+curation: views
+targets: [tables, datasource]
+transform:
+  - records: "urls[]"
+  - apply: {date_added: [to_timestamp]}
+  - output:
+      value: url
+      indicator_type: threat
+      valid_from: date_added
+      tags: tags
+      attrs: {urlhaus_id: id, host: host, url_status: url_status, threat: threat, reporter: reporter,
+              larted: larted, blacklists: blacklists, reference: urlhaus_reference, date_added: date_added}
+validate: {min_records: 0, max_change_pct: 1000}
+expiry: {max_age_days: 90}
+license: "abuse.ch URLhaus, CC0 (https://urlhaus.abuse.ch/api/)"

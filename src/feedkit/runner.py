@@ -93,7 +93,7 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
         finished_at=ts(datetime.now(timezone.utc)), period=period.isoformat() if period else None, forced=force,
         mode=spec.mode, sha256=result.sha256))
     save_state(storage, spec.name, FeedState(
-        etag=result.etag, last_modified=result.last_modified, sha256=result.sha256, cursor=state.cursor,
-        last_record_count=len(normalized), last_success_at=ts(now),
+        etag=result.etag, last_modified=result.last_modified, sha256=result.sha256,
+        cursor=result.cursor or state.cursor, last_record_count=len(normalized), last_success_at=ts(now),
         last_period=period.isoformat() if period else state.last_period))
     return RunOutcome("committed", fetch_id=info.fetch_id, record_count=len(normalized), period=period)
