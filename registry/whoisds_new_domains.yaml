@@ -1,0 +1,27 @@
+name: whoisds_new_domains
+mode: append
+period: {source: yesterday}
+category: new_domains
+effect: enrich
+observable_type: domain
+fetch:
+  operator: http_snapshot
+  # The free daily list of newly registered domains: the file name is the base64 of "<yesterday>.zip".
+  url: "https://www.whoisdownload.com/download-panel/free-download-file/{base64:{period}.zip}/nrd/home"
+  format: zip+lines
+  zip_member: domain-names.txt
+change_detection: none
+# The list for a day is ready in the evening of that day (UTC); the job runs the next morning.
+schedule: {daily_at: "03:15"}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  - records: lines
+  - apply: {line: [trim, lower, strip_dots]}  # IDN names stay in Unicode
+  - drop_if_empty: [line]
+  - set: {indicator_type: new_domain}
+  - output: {value: line, indicator_type: indicator_type, attrs: {}}
+# The free list is capped at 70,000 names per day.
+validate: {min_records: 10000, max_change_pct: 80}
+license: "WhoisDownload free newly registered domains list, terms of use (https://www.whoisdownload.com/)"

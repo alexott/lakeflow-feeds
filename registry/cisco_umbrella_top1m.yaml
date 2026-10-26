@@ -1,0 +1,25 @@
+name: cisco_umbrella_top1m
+mode: append
+period: {source: last_modified}
+category: top_sites
+effect: enrich
+observable_type: domain
+fetch:
+  operator: http_snapshot
+  url: http://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip
+  format: zip+csv
+  zip_member: top-1m.csv
+change_detection: last_modified
+# Published about 01:40 UTC; the job starts at 02:00 and the sensor waits for the new list.
+schedule: {daily_after: "02:00", wait_until_available: 12h}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  # DNS-based popularity, so it also has subdomains and non-web names (hicloudcam.com, *.akadns.net).
+  - records: {csv: {fieldnames: [rank, domain]}}
+  - apply: {domain: [trim, lower, strip_dots]}
+  - drop_if_empty: [domain]
+  - output: {value: domain, attrs: {rank: "to_number(rank)"}}
+validate: {min_records: 900000, canaries: [google.com, microsoft.com]}
+license: "Cisco Umbrella Popularity List, free to use (https://umbrella-static.s3-us-west-1.amazonaws.com/index.html)"

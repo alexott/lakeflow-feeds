@@ -16,10 +16,11 @@ class MemorySink:
 
 class FakeFetcher:
     def __init__(self, *results):
-        self.results, self.calls = list(results), 0
+        self.results, self.calls, self.fetches = list(results), 0, []
 
     def __call__(self, fetch, change_detection, state):
         self.calls += 1
+        self.fetches.append(fetch)
         return self.results.pop(0)
 
 

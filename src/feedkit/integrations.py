@@ -13,7 +13,7 @@ from databricks.lakeflow.integrations import Context, Sensor, SensorResult, inte
 
 from feedkit import http
 from feedkit.manifest import period_committed
-from feedkit.period import period_from_metadata
+from feedkit.period import has_url_template, period_from_metadata, render_url
 from feedkit.registry import FeedSpec, load_registry
 from feedkit.runner import run_feed
 from feedkit.secrets import substitute
@@ -106,7 +106,13 @@ def _now() -> dt.datetime:
 
 
 def has_new_version(spec: FeedSpec, storage: Storage, head_fn, now: dt.datetime) -> bool:
-    etag, last_modified = head_fn(spec.fetch)
+    fetch = spec.fetch
+    if has_url_template(fetch.url):
+        period = period_from_metadata(spec.period, now)
+        if period_committed(storage, spec.name, period):
+            return False
+        fetch = fetch.model_copy(update={"url": render_url(fetch.url, period)})
+    etag, last_modified = head_fn(fetch)
     if spec.mode == "append":
         period = period_from_metadata(spec.period, now, last_modified)
         return period is None or not period_committed(storage, spec.name, period)

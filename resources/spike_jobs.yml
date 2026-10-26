@@ -203,3 +203,127 @@ resources:
               - {name: feed, value: tranco_top1m}
               - {name: registry_dir, value: "${workspace.file_path}/registry"}
               - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_whoisds_new_domains:
+      name: "feed whoisds_new_domains"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: whoisds_new_domains}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 15 3 * * ?", timezone_id: UTC}
+      # The list for yesterday; it is ready in the evening of that day.
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: whoisds_new_domains}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_aws_ip_ranges:
+      name: "feed aws_ip_ranges"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: aws_ip_ranges}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 23 0/6 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: aws_ip_ranges}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_gcp_ip_ranges:
+      name: "feed gcp_ip_ranges"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: gcp_ip_ranges}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 33 1/12 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: gcp_ip_ranges}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    # Both Cloudflare lists in one job: the two parallel tasks share compute (cost test for grouped feeds).
+    feed_cloudflare_ips:
+      name: "feed cloudflare_ips"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: cloudflare_ips}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 3 5 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect_v4
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: cloudflare_ips_v4}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: collect_v6
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: cloudflare_ips_v6}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_cisco_umbrella_top1m:
+      name: "feed cisco_umbrella_top1m"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: cisco_umbrella_top1m}
+      parameters:
+        - {name: force, default: "false"}
+      # Published about 01:40 UTC.
+      schedule: {quartz_cron_expression: "0 0 2 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: wait
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.FeedChangedSensor
+            parameters:
+              - {name: feed, value: cisco_umbrella_top1m}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: poll_minutes, value: "30"}
+              - {name: max_wait_hours, value: "12"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: changed
+          depends_on: [{task_key: wait}]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.wait.values.changed}}"
+            right: "true"
+        - task_key: collect
+          depends_on: [{task_key: changed, outcome: "true"}]
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: cisco_umbrella_top1m}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}

@@ -21,8 +21,10 @@ def test_tor_rejects_an_html_block_page():
 
 
 def test_packaged_registry_has_the_spike_feeds():
-    assert sorted(FEEDS) == ["feodo_ipblocklist", "malwarebazaar_recent", "otx_indicators", "threatfox_recent",
-                             "tor_exit_nodes", "tranco_top1m", "urlhaus_payloads", "urlhaus_urls"]
+    assert sorted(FEEDS) == ["aws_ip_ranges", "cisco_umbrella_top1m", "cloudflare_ips_v4", "cloudflare_ips_v6",
+                             "feodo_ipblocklist", "gcp_ip_ranges", "malwarebazaar_recent", "otx_indicators",
+                             "threatfox_recent", "tor_exit_nodes", "tranco_top1m", "urlhaus_payloads", "urlhaus_urls",
+                             "whoisds_new_domains"]
     assert {s.mode for s in FEEDS.values()} == {"append", "merge", "replace"}
     assert load_settings(REGISTRY / "settings.yaml").catalog == "cybersecurity"
 

@@ -62,4 +62,29 @@ CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.otx_indicators (
   record_no BIGINT, record_type STRING, payload VARIANT
 ) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed otx_indicators (replay source).';
 
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.cisco_umbrella_top1m (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed cisco_umbrella_top1m (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.whoisds_new_domains (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed whoisds_new_domains (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.aws_ip_ranges (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed aws_ip_ranges (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.gcp_ip_ranges (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed gcp_ip_ranges (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.cloudflare_ips_v4 (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed cloudflare_ips_v4 (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.cloudflare_ips_v6 (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed cloudflare_ips_v6 (replay source).';
+
 SHOW TABLES IN {{catalog}}.{{raw_schema}};

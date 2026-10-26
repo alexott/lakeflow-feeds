@@ -1,0 +1,23 @@
+name: gcp_ip_ranges
+mode: replace
+history: {type: snapshots, retain_days: 30}
+category: cloud_range
+effect: enrich
+observable_type: net_addr
+fetch:
+  operator: http_snapshot
+  url: https://www.gstatic.com/ipranges/cloud.json
+  format: json
+change_detection: last_modified
+schedule: {every: 12h}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  - records: "prefixes[]"
+  - extract: {cidr: "ipv4Prefix || ipv6Prefix"}
+  - apply: {cidr: [cidr_normalize]}
+  - drop_if_empty: [cidr]
+  - output: {value: cidr, attrs: {provider: "'gcp'", service: service, region: scope}}
+validate: {min_records: 500}
+license: "Google Cloud public IP address ranges (https://cloud.google.com/compute/docs/faq#find_ip_range)"

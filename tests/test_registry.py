@@ -136,3 +136,9 @@ def test_split_by_needs_pagination(tmp_path):
     text = mutate(TOR, 'format: lines}', 'format: json, split_by: {param: types, values: [URL]}}')
     with pytest.raises(RegistryError, match="split_by"):
         load_feed(write(tmp_path, text))
+
+
+def test_url_template_needs_a_period_known_before_the_fetch(tmp_path):
+    bad = TOR.replace('url: "https://check.torproject.org/torbulkexitlist"', 'url: "https://w/{period}"')
+    with pytest.raises(RegistryError, match="URL template"):
+        load_feed(write(tmp_path, bad))

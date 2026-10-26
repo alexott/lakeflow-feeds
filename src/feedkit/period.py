@@ -1,6 +1,8 @@
 """Which period (day) a fetch of an append feed belongs to (spec §4.1, §5)."""
 from __future__ import annotations
 
+import base64
+import re
 from collections import Counter
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
@@ -43,3 +45,17 @@ def detect_period(period: Period, now: datetime, *, last_modified: str | None = 
     if found is None:
         raise ValueError(f"cannot determine the period from source {period.source!r}")
     return found
+
+
+_PERIOD = re.compile(r"\{period(?::([^{}]+))?\}")
+_BASE64 = re.compile(r"\{base64:([^{}]*)\}")
+
+
+def has_url_template(url: str | None) -> bool:
+    return bool(url) and bool(_PERIOD.search(url) or _BASE64.search(url))
+
+
+def render_url(url: str, period: date) -> str:
+    """Fill {period} / {period:<strftime>} first, then {base64:<text>} (WhoisDownload: {base64:{period}.zip})."""
+    url = _PERIOD.sub(lambda m: period.strftime(m.group(1)) if m.group(1) else period.isoformat(), url)
+    return _BASE64.sub(lambda m: base64.b64encode(m.group(1).encode()).decode(), url)

@@ -1,6 +1,7 @@
 """Feed registry: one YAML file per feed, validated into a FeedSpec (spec §4, §4.1, §6.1)."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -15,6 +16,10 @@ OBSERVABLE_KINDS = frozenset({
     "actor_id", "mac", "aws_arn", "aws_account_id", "aws_instance_id", "trace_id",
     "serial_number", "resource_tag", "mitre_attack_technique",
 })
+
+
+# {period}, {period:<strftime>}, {base64:...} placeholders in fetch.url (rendered by feedkit.period.render_url).
+_URL_TEMPLATE = re.compile(r"\{(period(:[^{}]+)?|base64:[^{}]*)\}")
 
 
 class RegistryError(ValueError):
@@ -155,6 +160,9 @@ class FeedSpec(_Model):
         bad = malformed_refs([self.fetch.url, self.fetch.headers, self.fetch.body])
         if bad:
             raise ValueError(f"malformed secret reference (use {{{{secrets/<scope>/<key>}}}}): {bad}")
+        if _URL_TEMPLATE.search(self.fetch.url or "") and not (
+                self.mode == "append" and self.period and self.period.source in ("today", "yesterday")):
+            raise ValueError("a {period} URL template needs mode: append with period source today or yesterday")
         if self.fetch.split_by and not self.fetch.pagination:
             raise ValueError("fetch.split_by needs fetch.pagination")
         if self.fetch.operator == "custom" and not self.fetch.entrypoint:

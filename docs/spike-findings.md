@@ -112,6 +112,21 @@ Enabled filebeat sources → feeds: `abuseurl` → `urlhaus_urls`, `abusemalware
 - Our handling: one request series per OTX type (`split_by: types`), `max_lookback_hours: 12`, and `pagination.on_limit: truncate` at 95 pages (the manifest is marked `truncated: true`). First run: 95,323 indicators in 404 s, URLs truncated.
 - OTX throttles long crawls (429 without `Retry-After`) and returns 504 on deep pages. Pagination now has a page delay, a 429 budget, and a 5xx budget with exponential backoff.
 
+## Feeds added for cost measurement (2026-10-26)
+
+Six feeds with other shapes and schedules, so S6 covers more than hourly IoC feeds. All six committed on the first run (standard performance mode, about 3 minutes in the queue).
+
+| Feed | Mode | Schedule | First fetch | Notes |
+|---|---|---|---|---|
+| `cisco_umbrella_top1m` | append | daily 02:00 UTC + sensor | 1,000,000 rows, collect 461 s | Second 1M list. Local run: 14 s, 1.7 GiB peak |
+| `whoisds_new_domains` | append (yesterday) | daily 03:15 UTC | 70,000 rows, 41 s | Needs a date in the URL: new URL templates `{period}`, `{base64:...}`. The free list is capped at 70,000 |
+| `aws_ip_ranges` | replace | every 6 h | 17,693 CIDRs, 15 s | ETag; one row per (prefix, service) |
+| `gcp_ip_ranges` | replace | every 12 h | 1,135 CIDRs, 5 s | Last-Modified |
+| `cloudflare_ips_v4`, `_v6` | replace | daily, one job, two parallel tasks | 15 + 7 CIDRs, 4 s | No ETag: unchanged runs end on the sha256 check and write nothing (cost of a no-op run). One job tests shared compute for grouped feeds |
+
+- The first runs of all six started at the same second (15:31:12 UTC), so they probably shared compute. The billing rows will show whether usage goes to only one of them.
+- Not added: PhishTank (`online-valid.json` now returns an image) and the Infoblox CSV from sirens (404; the repository moved). MISP warninglists and ESET need the `github_repo` operator, which is not built yet.
+
 ## Platform findings (2026-10-26)
 
 - Task retries (`max_retries`) do not work for `python_operator_task`: attempts 1 and 2 fail within seconds with "Task failed due to an internal error". A failed run waits for the next scheduled run.

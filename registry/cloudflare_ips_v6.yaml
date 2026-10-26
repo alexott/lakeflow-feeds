@@ -1,0 +1,23 @@
+name: cloudflare_ips_v6
+mode: replace
+history: {type: snapshots, retain_days: 30}
+category: cdn_range
+effect: enrich
+observable_type: net_addr
+fetch:
+  operator: http_snapshot
+  url: https://www.cloudflare.com/ips-v6
+  format: lines
+# No ETag or Last-Modified; an unchanged list is detected by its sha256 and writes nothing.
+change_detection: none
+schedule: {every: 1d}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  - records: lines
+  - apply: {line: [cidr_normalize]}  # an HTML block page gives no CIDRs and fails min_records
+  - drop_if_empty: [line]
+  - output: {value: line, attrs: {provider: "'cloudflare'"}}
+validate: {min_records: 5}
+license: "Cloudflare IP ranges, public (https://www.cloudflare.com/ips/)"

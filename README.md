@@ -20,6 +20,11 @@ Status: phase 0 spike. It is live on `az-alexott`, target `spike`. Cost numbers 
 | `urlhaus_payloads` | abuse.ch URLhaus recent payload hashes | merge | hourly | yes |
 | `malwarebazaar_recent` | abuse.ch MalwareBazaar recent samples | merge | hourly | yes |
 | `otx_indicators` | AlienVault OTX indicators export (cursor) | merge | hourly | yes |
+| `cisco_umbrella_top1m` | Cisco Umbrella top 1M domains (DNS popularity) | append (one list per day) | daily, after 02:00 UTC, sensor waits for a new list | no |
+| `whoisds_new_domains` | WhoisDownload newly registered domains (free list, 70k per day) | append (yesterday's list) | daily, 03:15 UTC | no |
+| `aws_ip_ranges` | AWS IP ranges (`ip-ranges.json`) | replace | every 6 h | no |
+| `gcp_ip_ranges` | Google Cloud IP ranges (`cloud.json`) | replace | every 12 h | no |
+| `cloudflare_ips_v4`, `cloudflare_ips_v6` | Cloudflare IP ranges | replace | daily, one job with two parallel tasks | no |
 
 The abuse.ch and OTX feeds need API keys (see [Secrets](#secrets)). The license of each source is in the `license:` field of its feed YAML.
 
@@ -173,6 +178,7 @@ Other fetch options:
 - `split_by: {param, values}`.
 - `cursor: {param, first_lookback_hours, overlap_minutes, max_lookback_hours}`.
 - `connection` to call the source through a UC HTTP connection.
+- URL templates for sources whose URL contains the date: `{period}` (ISO date), `{period:<strftime>}`, and `{base64:<text>}`. For example, `whoisds_new_domains` uses `.../free-download-file/{base64:{period}.zip}/nrd/home`. Templates need `mode: append` with `period: {source: today | yesterday}`, so the period is known before the download.
 
 `append` feeds also need `period: {source: last_modified | zip_mtime | today | yesterday | field:<name>}`.
 

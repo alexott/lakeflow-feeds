@@ -1,0 +1,47 @@
+[
+ {
+  "attrs": {
+   "network_border_group": "eu-west-1",
+   "provider": "aws",
+   "region": "eu-west-1",
+   "service": "AMAZON"
+  },
+  "value": "3.4.12.4/32"
+ },
+ {
+  "attrs": {
+   "network_border_group": "ap-northeast-2",
+   "provider": "aws",
+   "region": "ap-northeast-2",
+   "service": "AMAZON"
+  },
+  "value": "3.5.140.0/22"
+ },
+ {
+  "attrs": {
+   "network_border_group": "ap-east-2",
+   "provider": "aws",
+   "region": "ap-east-2",
+   "service": "AMAZON"
+  },
+  "value": "15.190.244.0/22"
+ },
+ {
+  "attrs": {
+   "network_border_group": "ap-southeast-4",
+   "provider": "aws",
+   "region": "ap-southeast-4",
+   "service": "AMAZON"
+  },
+  "value": "2406:daba:f000::/40"
+ },
+ {
+  "attrs": {
+   "network_border_group": "ap-southeast-1",
+   "provider": "aws",
+   "region": "ap-southeast-1",
+   "service": "AMAZON"
+  },
+  "value": "2406:daf9:a800::/40"
+ }
+]

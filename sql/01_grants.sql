@@ -11,6 +11,12 @@ GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.urlhaus_urls TO `{{sp}}
 GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.urlhaus_payloads TO `{{sp}}`;
 GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.malwarebazaar_recent TO `{{sp}}`;
 GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.otx_indicators TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.cisco_umbrella_top1m TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.whoisds_new_domains TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.aws_ip_ranges TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.gcp_ip_ranges TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.cloudflare_ips_v4 TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.cloudflare_ips_v6 TO `{{sp}}`;
 GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.landing TO `{{sp}}`;
 GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.manifests TO `{{sp}}`;
 GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.state TO `{{sp}}`;

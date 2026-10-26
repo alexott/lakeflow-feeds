@@ -28,3 +28,10 @@ def test_detect_period_zip_and_field():
 def test_detect_period_missing_raises():
     with pytest.raises(ValueError, match="period"):
         detect_period(Period(source="zip_mtime"), NOW)
+
+
+def test_render_url_period_formats_and_base64():
+    from feedkit.period import has_url_template, render_url
+    url = "https://w/{base64:{period}.zip}/x?d={period:%Y%m%d}&s={{secrets/a/b}}"
+    assert has_url_template(url) and not has_url_template("https://w/{{secrets/a/b}}")
+    assert render_url(url, date(2026, 10, 25)) == "https://w/MjAyNi0xMC0yNS56aXA=/x?d=20261025&s={{secrets/a/b}}"

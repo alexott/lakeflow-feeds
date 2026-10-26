@@ -1,0 +1,92 @@
+[
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "173.245.48.0/20"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "103.21.244.0/22"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "103.22.200.0/22"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "103.31.4.0/22"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "141.101.64.0/18"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "108.162.192.0/18"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "190.93.240.0/20"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "188.114.96.0/20"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "197.234.240.0/22"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "198.41.128.0/17"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "162.158.0.0/15"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "104.16.0.0/13"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "104.24.0.0/14"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "172.64.0.0/13"
+ },
+ {
+  "attrs": {
+   "provider": "cloudflare"
+  },
+  "value": "131.0.72.0/22"
+ }
+]

@@ -1,0 +1,27 @@
+name: aws_ip_ranges
+mode: replace
+history: {type: snapshots, retain_days: 30}
+category: cloud_range
+effect: enrich
+observable_type: net_addr
+fetch:
+  operator: http_snapshot
+  url: https://ip-ranges.amazonaws.com/ip-ranges.json
+  format: json
+change_detection: etag
+# Changes several times a day; an unchanged file costs only a conditional request.
+schedule: {every: 6h}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  # The same prefix is listed once per service (AMAZON, EC2, ...): one row per (prefix, service).
+  - records: ["prefixes[]", "ipv6_prefixes[]"]
+  - extract: {cidr: "ip_prefix || ipv6_prefix"}
+  - apply: {cidr: [cidr_normalize]}
+  - drop_if_empty: [cidr]
+  - output:
+      value: cidr
+      attrs: {provider: "'aws'", service: service, region: region, network_border_group: network_border_group}
+validate: {min_records: 10000}
+license: "Amazon Web Services public IP address ranges (https://docs.aws.amazon.com/vpc/latest/userguide/aws-ip-ranges.html)"

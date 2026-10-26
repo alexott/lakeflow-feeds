@@ -10,7 +10,7 @@ import jmespath
 
 from feedkit.http import FetchError, FetchResult, unzip_member
 from feedkit.manifest import Manifest, latest_manifest, period_committed, write_manifest
-from feedkit.period import detect_period, period_from_metadata
+from feedkit.period import detect_period, has_url_template, period_from_metadata, render_url
 from feedkit.records import FetchInfo, new_fetch_id, normalized_row, raw_row, ts
 from feedkit.registry import FeedSpec
 from feedkit.settings import Settings
@@ -38,8 +38,11 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
     if period_meta and not force and period_committed(storage, spec.name, period_meta):
         return RunOutcome("period_exists", period=period_meta)
 
+    fetch = spec.fetch
+    if has_url_template(fetch.url):  # registry validation makes sure period_meta is known here
+        fetch = fetch.model_copy(update={"url": render_url(fetch.url, period_meta)})
     # force: no conditional request (ETag / Last-Modified), so a reload really downloads again.
-    result = fetcher(spec.fetch, spec.change_detection, FeedState() if force else state)
+    result = fetcher(fetch, spec.change_detection, FeedState() if force else state)
     if not result.changed or (not force and result.sha256 and result.sha256 == state.sha256):
         return RunOutcome("not_modified")  # same bytes as the last commit, even without ETag support
     if spec.fetch.ok_when:

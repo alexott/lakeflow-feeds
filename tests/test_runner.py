@@ -128,8 +128,9 @@ def test_sink_failure_after_raw_leaves_no_manifest_and_no_state(tmp_path):
     assert manifests(tmp_path, "tor") == [] and load_state(storage, "tor") == FeedState()
 
 
-def append_today_spec():
-    return tor_spec(name="nrd", mode="append", period={"source": "today"}, change_detection="none")
+def append_today_spec(**over):
+    return tor_spec(**{"name": "nrd", "mode": "append", "period": {"source": "today"}, "change_detection": "none",
+                       **over})
 
 
 def test_append_today_second_run_skips_without_fetching(tmp_path):
@@ -268,3 +269,13 @@ def test_truncated_fetch_is_marked_in_the_manifest(tmp_path):
     run(tor_spec(), PathStorage(tmp_path), MemorySink(), FakeFetcher(res))
     [m] = manifests(tmp_path, "tor")
     assert json.loads((tmp_path / m).read_text())["truncated"] is True
+
+
+def test_append_url_template_is_rendered_from_the_period(tmp_path):
+    spec = append_today_spec(period={"source": "yesterday"}, fetch={
+        "operator": "http_snapshot", "format": "lines",
+        "url": "https://w.example/f/{base64:{period}.zip}/nrd?d={period:%Y%m%d}"})
+    fetcher = FakeFetcher(ok(lines(2)))
+    out = run(spec, PathStorage(tmp_path), MemorySink(), fetcher)
+    assert out.status == "committed" and out.period == date(2026, 10, 25)
+    assert fetcher.fetches[0].url == "https://w.example/f/MjAyNi0xMC0yNS56aXA=/nrd?d=20261025"
