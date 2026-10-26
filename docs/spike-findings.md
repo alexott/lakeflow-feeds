@@ -82,6 +82,6 @@ Open. Run the cost query after 3 days. Run durations so far: Tor collect 30 s, F
 
 - Zerobus writer: REST with `zerobus_encode`; keep batch size 1000 unless batch 5000 is clearly faster.
 - Keep the generic Lakewatch datasource for `merge` feeds. Note that domains and URLs land in the `hostnames` bucket.
-- Expiry for `merge` feeds should be based on the last-seen time (`sequence`), not `valid_from` (first seen). Decide in Plan 3.
+- Expiry for `merge` feeds is now based on the last-seen time (fixed in the final review: commit e1ea071). Feodo is still all-expired because its list is stale.
 - The ThreatFox merge key should probably include the port (or use `ioc_id`), or the port should be accepted as lost. Decide in Plan 3.
 - Default curation tier: pending S6.
