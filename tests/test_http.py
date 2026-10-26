@@ -271,3 +271,36 @@ def test_pagination_has_its_own_rate_limit_budget_and_page_delay():
     r = fetch(f, "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW, sleep=slept.append)
     assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}]}
     assert slept.count(30.0) == 4 and slept.count(1.5) == 1  # four 429 waits, one delay between pages
+
+
+@responses.activate
+def test_pagination_retries_5xx_with_backoff():  # OTX: 504 Gateway Time-out on deep pages
+    responses.get(API, json={"results": [{"i": 1}], "next": API + "?page=2"})
+    for _ in range(4):
+        responses.get(API + "?page=2", status=504, body="<html>504 Gateway Time-out</html>")
+    responses.get(API + "?page=2", json={"results": [{"i": 2}], "next": None})
+    f = cursor_fetch(pagination={"next": "next", "records": "results", "max_pages": 5, "server_error_retries": 5})
+    slept = []
+    r = fetch(f, "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW, sleep=slept.append)
+    assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}]}
+    assert slept == [2, 4, 8, 16]
+
+
+@responses.activate
+def test_pagination_gives_up_after_server_error_budget():
+    for _ in range(3):
+        responses.get(API, status=503)
+    f = cursor_fetch(pagination={"next": "next", "records": "results", "max_pages": 5, "server_error_retries": 2})
+    with pytest.raises(FetchError, match="503"):
+        fetch(f, "none", FeedState(), now=NOW, sleep=NO_SLEEP)
+    assert len(responses.calls) == 3
+
+
+@responses.activate
+def test_single_fetch_retries_5xx_with_backoff():
+    for _ in range(3):
+        responses.get(URL, status=502)
+    responses.get(URL, body=b"ok")
+    slept = []
+    assert fetch(F, "none", FeedState(), sleep=slept.append, server_error_retries=5).content == b"ok"
+    assert slept == [2, 4, 8]

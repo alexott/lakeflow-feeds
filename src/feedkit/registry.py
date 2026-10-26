@@ -34,6 +34,7 @@ class Pagination(_Model):
     on_limit: Literal["fail", "truncate"] = "fail"
     page_delay_seconds: float = 0.0  # pause between pages (APIs that rate-limit long crawls, e.g. OTX)
     rate_limit_retries: int = 3  # 429 retries per page (each waits Retry-After, default 30 s)
+    server_error_retries: int = 5  # 5xx retries per page, backoff 2, 4, 8, ... s (max 60 s)
 
 
 class SplitBy(_Model):

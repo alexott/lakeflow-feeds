@@ -58,6 +58,11 @@ def _shown(fetch: Fetch) -> str:
     return f"uc-connection:{fetch.connection}/{(fetch.url or '').lstrip('/')}" if fetch.connection else fetch.url or ""
 
 
+def _backoff(n: int) -> float:
+    """Wait before the n-th retry (0-based) of a server error: 2, 4, 8, ... seconds, at most 60."""
+    return min(2 ** (n + 1), 60)
+
+
 def _retry_after(resp: requests.Response, default: float = 30.0) -> float:
     try:
         return float(resp.headers.get("Retry-After", default))
@@ -67,7 +72,7 @@ def _retry_after(resp: requests.Response, default: float = 30.0) -> float:
 
 def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None, host=None, auth_headers=None,
           secret_lookup=None, sleep=time.sleep, attempts: int = 3, timeout: int = 300,
-          max_retry_after: float = 60.0, now: datetime | None = None) -> FetchResult:
+          max_retry_after: float = 60.0, now: datetime | None = None, server_error_retries: int = 5) -> FetchResult:
     """429 with a short Retry-After (<= max_retry_after) is retried within the attempt budget;
     a longer wait raises RateLimited, so the job retry (or a sensor deferral) takes over."""
     session = session or requests
@@ -101,12 +106,14 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
     if fetch.method == "GET" and change_detection == "last_modified" and state.last_modified:
         headers["If-Modified-Since"] = state.last_modified
     last_error = ""
-    for attempt in range(attempts):
+    attempt, failures = 0, 0  # attempt: connection errors and 429; failures: 5xx (own budget)
+    while attempt < attempts:
         try:
             resp = _send(session, fetch, url, headers, params, body, timeout)
         except (requests.ConnectionError, requests.Timeout) as e:
             last_error = type(e).__name__  # the exception text can contain the resolved URL
             sleep(2 ** attempt)
+            attempt += 1
             continue
         if resp.status_code == 304:
             return FetchResult(False, None, state.etag, state.last_modified, state.sha256, shown)
@@ -116,10 +123,14 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
                 raise RateLimited(wait)
             last_error = f"HTTP 429 (retry after {wait:.0f}s)"
             sleep(wait)
+            attempt += 1
             continue
         if resp.status_code >= 500:
             last_error = f"HTTP {resp.status_code}"
-            sleep(2 ** attempt)
+            if failures >= server_error_retries:
+                break
+            sleep(_backoff(failures))
+            failures += 1
             continue
         if resp.status_code >= 400:
             raise FetchError(f"HTTP {resp.status_code} for {shown}: {resp.text[:300]}")
@@ -145,7 +156,7 @@ def _paginate(fetch: Fetch, session, url, headers, params, body, shown, sleep, a
     for page in range(limits.max_pages):
         if page and limits.page_delay_seconds:
             sleep(limits.page_delay_seconds)
-        attempt, throttled = 0, 0
+        attempt, throttled, failures = 0, 0, 0
         while True:
             try:
                 resp = _send(session, fetch, url, headers, params, body, timeout)
@@ -162,9 +173,9 @@ def _paginate(fetch: Fetch, session, url, headers, params, body, shown, sleep, a
                 sleep(wait)
                 throttled += 1
                 continue
-            if resp.status_code >= 500 and attempt < attempts - 1:
-                sleep(2 ** attempt)
-                attempt += 1
+            if resp.status_code >= 500 and failures < limits.server_error_retries:
+                sleep(_backoff(failures))  # e.g. OTX 504 Gateway Time-out on deep pages
+                failures += 1
                 continue
             if resp.status_code >= 300:
                 raise FetchError(f"HTTP {resp.status_code} for {shown} page {page + 1}: {resp.text[:300]}")
