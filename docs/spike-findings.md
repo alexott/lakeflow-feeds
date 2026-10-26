@@ -70,6 +70,9 @@ Open. Run the cost query after 3 days. Run durations so far: Tor collect 30 s, F
 - The Zerobus wire-format encoder (S2).
 - The spike built only the generic Lakewatch datasource and only the Zerobus sink.
 - The spike's SDP tier uses materialized views plus AUTO CDC FROM SNAPSHOT, not streaming.
+- After the final review: `expiry` is allowed only for `merge` feeds; the current state of `replace`/`append` feeds is the latest commit, and staleness shows in the sensor (`FeedStale`) and in the `feeds.feed_health` view.
+- 429 handling: a short `Retry-After` (up to 60 s) is retried inside the run; a longer one raises `RateLimited`, and the job's task retries (2 × 5 min) or a sensor deferral take over.
+- An empty fetch (0 records) is a valid commit; the current state of `replace`/`append` feeds is chosen from the manifests (which now record `mode` and `sha256`).
 
 ## Source facts
 
