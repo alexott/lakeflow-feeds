@@ -10,8 +10,8 @@ fetch:
   format: json
   method: POST
   body: {query: get_iocs, days: 1}
-  # S4: try a UC HTTP connection first; this secret-scope header is the fallback.
-  secret_headers: {Auth-Key: abusech/auth_key}
+  # S4 showed the UC connection proxy forwards custom headers; the key itself comes from a secret.
+  headers: {Auth-Key: "{{secrets/abusech/auth_key}}"}
   # HTTP 200 with an error status (bad key) must fail; an empty window ("no_result") is fine.
   ok_when: "query_status == 'ok' || query_status == 'no_result'"
 change_detection: none

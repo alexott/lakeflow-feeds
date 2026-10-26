@@ -6,5 +6,6 @@ volume_root: /Volumes/cybersecurity/feeds
 zerobus_endpoint: https://6688808130562317.zerobus.westeurope.azuredatabricks.net
 zerobus_batch_size: 1000
 workspace_id: "6688808130562317"
-# Secret scope with sp_client_id / sp_client_secret of the feeds-collector service principal (Task 14).
-sp_secret_scope: feeds
+# feeds-collector service principal (Task 12); Databricks-style secret references.
+sp_client_id: "{{secrets/feeds/sp_client_id}}"
+sp_client_secret: "{{secrets/feeds/sp_client_secret}}"

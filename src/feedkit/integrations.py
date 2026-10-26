@@ -17,6 +17,7 @@ from feedkit.manifest import period_committed
 from feedkit.period import period_from_metadata
 from feedkit.registry import FeedSpec, load_registry
 from feedkit.runner import run_feed
+from feedkit.secrets import substitute
 from feedkit.settings import Settings, load_settings
 from feedkit.sinks import Sink, VolumeSink, ZerobusRestSink, ZerobusTokenProvider
 from feedkit.state import load_state
@@ -59,8 +60,8 @@ def build_deps(feed: str, registry_dir: str = "") -> Deps:
         if not settings.zerobus_endpoint or not settings.workspace_id:
             raise ValueError("settings.yaml needs zerobus_endpoint and workspace_id for sink: zerobus")
         tokens = ZerobusTokenProvider(w.config.host, settings.workspace_id,
-                                      secret_lookup(settings.sp_secret_scope, "sp_client_id"),
-                                      secret_lookup(settings.sp_secret_scope, "sp_client_secret"))
+                                      substitute(settings.sp_client_id, secret_lookup),
+                                      substitute(settings.sp_client_secret, secret_lookup))
         sink: Sink = ZerobusRestSink(settings.zerobus_endpoint, tokens, batch_size=settings.zerobus_batch_size)
     else:
         sink = VolumeSink(storage)

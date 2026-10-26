@@ -89,13 +89,14 @@ def test_custom_transform_function_allowed(tmp_path):
     assert spec.transform == {"function": "feedkit.custom.x:y"}
 
 
-def test_post_fetch_with_secret_header(tmp_path):
+def test_post_fetch_with_secret_reference_header(tmp_path):
     text = mutate(TOR, 'format: lines}', 'format: json, method: POST, body: {query: get_iocs, days: 1}, '
-                                        'secret_headers: {Auth-Key: abusech/auth_key}}')
+                                        'headers: {Auth-Key: "{{secrets/abusech/auth_key}}"}}')
     spec = load_feed(write(tmp_path, text))
     assert spec.fetch.method == "POST" and spec.fetch.body == {"query": "get_iocs", "days": 1}
-    bad = mutate(text, "abusech/auth_key", "just-a-key")
-    with pytest.raises(RegistryError, match="secret_headers"):
+    assert spec.fetch.headers == {"Auth-Key": "{{secrets/abusech/auth_key}}"}
+    bad = mutate(text, "{{secrets/abusech/auth_key}}", "{{secrets/abusech}}")
+    with pytest.raises(RegistryError, match="secret reference"):
         load_feed(write(tmp_path, bad))
 
 

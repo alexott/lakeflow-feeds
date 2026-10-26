@@ -12,6 +12,7 @@ from typing import Callable
 import requests
 
 from feedkit.registry import Fetch
+from feedkit.secrets import substitute, substitute_all
 from feedkit.state import FeedState
 
 
@@ -37,19 +38,14 @@ class FetchResult:
 
 def resolve(fetch: Fetch, *, host: str | None, auth_headers: Callable[[], dict] | None,
             secret_lookup: Callable[[str, str], str] | None = None) -> tuple[str, dict]:
-    headers = dict(fetch.headers)
-    for header, ref in fetch.secret_headers.items():
-        if secret_lookup is None:
-            raise FetchError(f"secret header {header} needs a secret lookup")
-        scope, key = ref.split("/", 1)
-        headers[header] = secret_lookup(scope, key)
+    headers = substitute_all(dict(fetch.headers), secret_lookup)
     if fetch.connection:
         if not host or auth_headers is None:
             raise FetchError("a UC connection needs the workspace host and auth headers")
         path = (fetch.url or "").lstrip("/")
         return (f"{host.rstrip('/')}/api/2.0/unity-catalog/connections/{fetch.connection}/proxy/{path}",
                 {**auth_headers(), **headers})
-    return fetch.url or "", headers
+    return substitute(fetch.url or "", secret_lookup), headers
 
 
 def _retry_after(resp: requests.Response) -> float:
@@ -70,7 +66,8 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
     last_error = ""
     for attempt in range(attempts):
         try:
-            resp = session.request(fetch.method, url, headers=headers, json=fetch.body, timeout=timeout)
+            resp = session.request(fetch.method, url, headers=headers, json=substitute_all(fetch.body, secret_lookup),
+                                   timeout=timeout)
         except (requests.ConnectionError, requests.Timeout) as e:
             last_error = str(e)
             sleep(2 ** attempt)

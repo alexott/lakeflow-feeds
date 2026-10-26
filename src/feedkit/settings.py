@@ -15,7 +15,9 @@ class Settings:
     zerobus_endpoint: str | None = None
     zerobus_batch_size: int = 1000
     workspace_id: str | None = None
-    sp_secret_scope: str = "feeds"
+    # Run-as service principal for Zerobus tokens; {{secrets/<scope>/<key>}} references.
+    sp_client_id: str = "{{secrets/feeds/sp_client_id}}"
+    sp_client_secret: str = "{{secrets/feeds/sp_client_secret}}"
 
     def raw_table(self, feed: str) -> str:
         return f"{self.catalog}.{self.raw_schema}.{feed}"

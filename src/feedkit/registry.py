@@ -7,6 +7,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from feedkit.secrets import malformed_refs
+
 # Lakewatch parser observable kinds (lakewatch-parser-dev references/indicators.md).
 OBSERVABLE_KINDS = frozenset({
     "ip", "net_addr", "domain", "hostname", "url", "hash", "email", "cve", "username",
@@ -31,8 +33,7 @@ class Fetch(_Model):
     method: Literal["GET", "POST"] = "GET"
     body: dict[str, Any] | None = None  # JSON body for POST APIs (ThreatFox get_iocs)
     connection: str | None = None
-    headers: dict[str, str] = Field(default_factory=dict)
-    secret_headers: dict[str, str] = Field(default_factory=dict)  # header -> "<scope>/<key>"; fallback when a UC connection can't send the header
+    headers: dict[str, str] = Field(default_factory=dict)  # values may hold {{secrets/<scope>/<key>}} references
     ok_when: str | None = None  # JMESPath on the JSON response; false -> the fetch fails (API error bodies with HTTP 200)
     entrypoint: str | None = None
 
@@ -118,9 +119,9 @@ class FeedSpec(_Model):
             uses_explode = any("explode" in step for step in self.transform)
             if uses_explode and "datasource" in self.targets and self.datasource == "per_feed":
                 raise ValueError("feeds with explode can only use the generic datasource")
-        for header, ref in self.fetch.secret_headers.items():
-            if ref.count("/") != 1:
-                raise ValueError(f"secret_headers.{header} must be '<scope>/<key>'")
+        bad = malformed_refs([self.fetch.url, self.fetch.headers, self.fetch.body])
+        if bad:
+            raise ValueError(f"malformed secret reference (use {{{{secrets/<scope>/<key>}}}}): {bad}")
         if self.fetch.operator == "custom" and not self.fetch.entrypoint:
             raise ValueError("fetch.operator: custom needs fetch.entrypoint")
         return self

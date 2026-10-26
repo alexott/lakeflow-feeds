@@ -84,7 +84,7 @@ def test_post_with_json_body_and_secret_header():
                    match=[responses.matchers.json_params_matcher({"query": "get_iocs", "days": 1}),
                           responses.matchers.header_matcher({"Auth-Key": "k123"})])
     f = Fetch(operator="http_snapshot", url=api, format="json", method="POST", body={"query": "get_iocs", "days": 1},
-              secret_headers={"Auth-Key": "abusech/auth_key"})
+              headers={"Auth-Key": "{{secrets/abusech/auth_key}}"})
     lookups = []
     r = fetch(f, "etag", FeedState(etag='"ignored"'),
               secret_lookup=lambda scope, key: lookups.append((scope, key)) or "k123")
