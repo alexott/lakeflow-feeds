@@ -81,6 +81,23 @@ Open. Run the cost query after 3 days. Run durations so far: Tor collect 30 s, F
 - Tranco redirects (307) to `/download/daily/top-1m.csv.zip`. The final response has `ETag` and `Last-Modified`, with the same date as the zip member.
 - ThreatFox lists the same IP with several ports. The merge key `[observable_type, value]` keeps only one row per IP (with the latest port).
 
+## Threat-intel feeds ported from the filebeat threatintel module (2026-10-26)
+
+Enabled filebeat sources → feeds: `abuseurl` → `urlhaus_urls`, `abusemalware` → `urlhaus_payloads`, `malwarebazaar` → `malwarebazaar_recent`, `otx` → `otx_indicators` (all `merge`, hourly, generic Lakewatch datasource).
+
+- All abuse.ch APIs now require an `Auth-Key` (401 without). MalwareBazaar `get_recent` needs a form-encoded POST.
+- URLhaus recent: 1,000 URLs and 1,000 payloads per call; payloads repeat files across URLs (2,000 hash rows = 244 files).
+- OTX export: 1,000 items per page; `next` is a **relative** link; items have no timestamps (`id, indicator, type, title, description, content`).
+- OTX refuses more than **100,000 indicators per `modified_since` window** (HTTP 400 "Temporarily unable to request more than 100,000 indicators"). Volume is bursty: one pulse update carried 109k URLs within 20 minutes, while the 3 h around it had 325 indicators. The export has no upper time bound, so such a burst cannot be split. This likely explains why filebeat's OTX data in `cybersecurity.threatintel.iocs` stops on 2026-10-23.
+- Our handling: one request series per OTX type (`split_by: types`), `max_lookback_hours: 12`, and `pagination.on_limit: truncate` at 95 pages (the manifest is marked `truncated: true`). First run: 95,323 indicators in 404 s, URLs truncated.
+- OTX throttles long crawls (429 without `Retry-After`) and returns 504 on deep pages. Pagination now has a page delay, a 429 budget, and a 5xx budget with exponential backoff.
+
+## Platform findings (2026-10-26)
+
+- Task retries (`max_retries`) do not work for `python_operator_task`: attempts 1 and 2 fail within seconds with "Task failed due to an internal error". A failed run waits for the next scheduled run.
+- Serverless environments cache an installed wheel by name and version. With a fixed `feedkit 0.1.0`, jobs kept running old code after deploys. `dynamic_version: true` on the wheel artifact fixes it.
+- A YAML flow mapping value that contains `${...}` must be quoted in bundle files.
+
 ## Decisions for Plan 2 (draft, to confirm after S3/S6)
 
 - Zerobus writer: REST with `zerobus_encode`; keep batch size 1000 unless batch 5000 is clearly faster.
