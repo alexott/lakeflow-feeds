@@ -6,7 +6,7 @@ import pytest
 import requests
 import responses
 
-from feedkit.sinks import SinkError, VolumeSink, ZerobusRestSink, ZerobusTokenProvider
+from feedkit.sinks import SinkError, VolumeSink, ZerobusRestSink, ZerobusTokenProvider, zerobus_encode
 from feedkit.storage import PathStorage
 
 EP = "https://zerobus.example"
@@ -27,7 +27,7 @@ def test_batches_rows_as_json_arrays_with_auth():
     sink(batch_size=2).write(TABLE, rows, fetch_id="f1", day=DAY)
     bodies = [json.loads(c.request.body) for c in responses.calls]
     assert [len(b) for b in bodies] == [2, 2, 1]
-    assert bodies[0][0] == {"value": "0", "attrs": {"n": 0}}  # VARIANT as nested JSON
+    assert bodies[0][0] == {"value": "0", "attrs": '{"n": 0}'}  # VARIANT is sent as a JSON string
     assert responses.calls[0].request.headers["Authorization"] == f"Bearer t-{TABLE}"
 
 
@@ -99,3 +99,12 @@ def test_volume_sink_stages_then_lands(tmp_path):
     assert storage.listdir("landing/_staging/records") == []
     lines = gzip.decompress(landed.read_bytes()).decode().splitlines()
     assert [json.loads(line) for line in lines] == [{"a": 1}, {"a": 2}]
+
+
+def test_zerobus_encode_matches_the_rest_wire_format():
+    # Verified against az-alexott on 2026-10-26: ISO strings and nested objects are rejected (error 4044).
+    row = {"fetched_at": "2026-10-26T00:00:00.000000Z", "sequence": "1970-01-01T00:00:01.000002Z",
+           "valid_from": None, "period": "2026-10-26", "payload": {"line": "1.2.3.4"}, "attrs": {}, "value": "x"}
+    assert zerobus_encode(row) == {
+        "fetched_at": 1792972800000000, "sequence": 1000002, "valid_from": None, "period": 20752,
+        "payload": '{"line": "1.2.3.4"}', "attrs": "{}", "value": "x"}

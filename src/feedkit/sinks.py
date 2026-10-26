@@ -4,7 +4,7 @@ from __future__ import annotations
 import gzip
 import json
 import time
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Protocol
 
 import requests
@@ -14,6 +14,30 @@ from feedkit.storage import Storage
 
 class SinkError(Exception):
     pass
+
+
+# Zerobus REST JSON wire format, verified against az-alexott on 2026-10-26 (ISO strings and
+# nested objects fail with error 4044): TIMESTAMP = epoch microseconds, DATE = days since
+# 1970-01-01, VARIANT = a JSON string. Column names are the record contracts of spec 6.
+_TS_COLUMNS = ("fetched_at", "sequence", "valid_from", "valid_until")
+_DATE_COLUMNS = ("period",)
+_VARIANT_COLUMNS = ("payload", "attrs")
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def zerobus_encode(row: dict) -> dict:
+    out = dict(row)
+    for column in _TS_COLUMNS:
+        if out.get(column) is not None:
+            moment = datetime.fromisoformat(str(out[column]).replace("Z", "+00:00"))
+            out[column] = (moment - _EPOCH) // timedelta(microseconds=1)
+    for column in _DATE_COLUMNS:
+        if out.get(column) is not None:
+            out[column] = (date.fromisoformat(out[column]) - _EPOCH.date()).days
+    for column in _VARIANT_COLUMNS:
+        if column in out:
+            out[column] = json.dumps(out[column])
+    return out
 
 
 class Sink(Protocol):
@@ -80,8 +104,9 @@ class ZerobusRestSink:
 
     def write(self, table: str, rows: list[dict], *, fetch_id: str, day: date) -> None:
         url = f"{self.endpoint}/zerobus/v1/tables/{table}/insert"
-        for i in range(0, len(rows), self.batch_size):
-            self._post(table, url, rows[i:i + self.batch_size])
+        encoded = [zerobus_encode(r) for r in rows]
+        for i in range(0, len(encoded), self.batch_size):
+            self._post(table, url, encoded[i:i + self.batch_size])
 
 
 class VolumeSink:
