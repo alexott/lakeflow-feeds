@@ -57,7 +57,7 @@ def test_retries_connection_error_then_gives_up():
     responses.get(URL, body=requests.ConnectionError("boom"))
     responses.get(URL, body=requests.ConnectionError("boom"))
     responses.get(URL, body=requests.ConnectionError("boom"))
-    with pytest.raises(FetchError, match="boom"):
+    with pytest.raises(FetchError, match="ConnectionError"):  # type only: the text may hold a resolved URL
         fetch(F, "none", FeedState(), sleep=NO_SLEEP)
 
 
@@ -116,3 +116,20 @@ def test_unzip_member_and_date():
     assert unzip_member(buf.getvalue(), None)[0] == b"1,google.com\n"
     with pytest.raises(FetchError, match="missing.csv"):
         unzip_member(buf.getvalue(), "missing.csv")
+
+
+@responses.activate
+def test_secret_in_url_never_appears_in_result_or_errors():  # review #2
+    responses.get("https://api.example.test/feed?key=s3cr3t", body=b"ok")
+    f = Fetch(operator="http_snapshot", url="https://api.example.test/feed?key={{secrets/x/k}}")
+    r = fetch(f, "none", FeedState(), secret_lookup=lambda s, k: "s3cr3t")
+    assert "s3cr3t" not in r.url and "{{secrets/x/k}}" in r.url
+    responses.get("https://api.example.test/feed?key=s3cr3t", status=404, body="nope")
+    with pytest.raises(FetchError) as e:
+        fetch(f, "none", FeedState(), secret_lookup=lambda s, k: "s3cr3t", sleep=NO_SLEEP)
+    assert "s3cr3t" not in str(e.value)
+    for _ in range(3):
+        responses.get("https://api.example.test/feed?key=s3cr3t", body=requests.ConnectionError("conn to ...key=s3cr3t"))
+    with pytest.raises(FetchError) as e:
+        fetch(f, "none", FeedState(), secret_lookup=lambda s, k: "s3cr3t", sleep=NO_SLEEP)
+    assert "s3cr3t" not in str(e.value)

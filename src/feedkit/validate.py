@@ -13,12 +13,12 @@ class ValidationFailed(Exception):
 
 
 def check(spec: FeedSpec, records: list[dict], *, last_count: int | None,
-          period_meta: date | None = None, period_data: date | None = None) -> None:
+          period_meta: date | None = None, period_data: date | None = None, skip_change: bool = False) -> None:
     reasons: list[str] = []
     n = len(records)
     if n < spec.validate_.min_records:
         reasons.append(f"min_records: got {n}, need {spec.validate_.min_records}")
-    if last_count:
+    if last_count and not skip_change:  # force accepts a legitimate step change
         change = abs(n - last_count) / last_count * 100.0
         if change > spec.max_change_pct:
             reasons.append(f"max_change_pct: {last_count} -> {n} is {change:.1f}%, limit {spec.max_change_pct}%")

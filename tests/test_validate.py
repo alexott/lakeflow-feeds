@@ -61,3 +61,7 @@ def test_all_reasons_are_reported():
     with pytest.raises(ValidationFailed) as e:
         check(spec(min_records=5, canaries=["x"]), recs(1), last_count=100)
     assert len(e.value.reasons) == 3
+
+
+def test_skip_change_check_when_forced():  # review #4
+    check(spec("merge"), recs(500), last_count=5, skip_change=True)

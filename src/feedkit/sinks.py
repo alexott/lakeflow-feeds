@@ -92,7 +92,12 @@ class ZerobusRestSink:
         last = ""
         for attempt in range(self.attempts):
             headers = {"Authorization": f"Bearer {self.token_for(table)}", "Content-Type": "application/json"}
-            resp = self.session.post(url, data=json.dumps(batch), headers=headers, timeout=self.timeout)
+            try:
+                resp = self.session.post(url, data=json.dumps(batch), headers=headers, timeout=self.timeout)
+            except (requests.ConnectionError, requests.Timeout) as e:
+                last = type(e).__name__
+                self.sleep(2 ** attempt)
+                continue
             if resp.status_code < 300:
                 return
             last = f"HTTP {resp.status_code}: {resp.text[:500]}"

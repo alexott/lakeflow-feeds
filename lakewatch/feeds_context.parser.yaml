@@ -57,15 +57,21 @@ fields:
   - name: cve
     type: STRING
     observables: [cve]
+  - name: valid_from
+    type: TIMESTAMP
+    time_formats: ["#rfc3339"]
+    comment: First seen at the source.
   - name: valid_until
     type: TIMESTAMP
     time_formats: ["#rfc3339"]
+  - name: deleted
+    type: BOOLEAN
+    comment: Soft-delete marker (tombstone from the source).
   - name: attrs
     type: VARIANT
     comment: Feed-specific fields.
 time:
+  # Event time = when this version was observed (each fetch is a new event), not first seen.
   coalesce:
-    - path: valid_from
-      time_formats: ["#rfc3339"]
     - path: fetched_at
       time_formats: ["#rfc3339"]

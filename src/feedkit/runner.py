@@ -38,7 +38,8 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
     if period_meta and not force and period_committed(storage, spec.name, period_meta):
         return RunOutcome("period_exists", period=period_meta)
 
-    result = fetcher(spec.fetch, spec.change_detection, state)
+    # force: no conditional request (ETag / Last-Modified), so a reload really downloads again.
+    result = fetcher(spec.fetch, spec.change_detection, FeedState() if force else state)
     if not result.changed or (not force and result.sha256 and result.sha256 == state.sha256):
         return RunOutcome("not_modified")  # same bytes as the last commit, even without ETag support
     if spec.fetch.ok_when:
@@ -61,7 +62,8 @@ def run_feed(spec: FeedSpec, *, settings: Settings, storage: Storage, sink: Sink
         if not force and period_committed(storage, spec.name, period):
             return RunOutcome("period_exists", period=period)
 
-    check(spec, records, last_count=state.last_record_count, period_meta=period_meta, period_data=period)
+    check(spec, records, last_count=state.last_record_count, period_meta=period_meta, period_data=period,
+          skip_change=force)
     info = FetchInfo(spec.name, new_fetch_id(spec.name, now), now, result.url,
                      result.etag or result.sha256, period)
     normalized = [normalized_row(spec, info, rec, i) for i, rec in enumerate(records)]

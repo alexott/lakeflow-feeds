@@ -71,7 +71,8 @@ class FeedSpec(_Model):
     period: Period | None = None
     key: list[str] | None = None
     sequence_by: str | None = None
-    deletes: str = "none"  # none | tombstone_field:<f> | absent_in_full_fetch
+    # none | tombstone_field:<f>. absent_in_full_fetch needs per-feed views (Plan 3) and is rejected for now.
+    deletes: str = Field(default="none", pattern=r"^(none|tombstone_field:[A-Za-z_][A-Za-z0-9_]*)$")
     history: History | None = None
     category: str
     effect: Literal["allow", "enrich", "never_allow", "block"]

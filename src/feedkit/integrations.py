@@ -71,6 +71,10 @@ def build_deps(feed: str, registry_dir: str = "") -> Deps:
                 partial(http.head, host=w.config.host, auth_headers=auth, secret_lookup=secret_lookup))
 
 
+class FeedStale(RuntimeError):
+    """No new version within the wait and no success for too long: the source may be dead or moved."""
+
+
 _BUILD = build_deps
 # Operator stdout is not returned by the Jobs API, so failures also leave a traceback file here.
 ERROR_DIR = "/Volumes/cybersecurity/feeds/state/_errors"
@@ -121,9 +125,11 @@ def collect_feed(feed: str, registry_dir: str = "", force: bool = False) -> None
 @integration(display_name="Wait for a new feed version",
              description="Wait, without holding compute, until a feed source publishes a new version.")
 class FeedChangedSensor(Sensor):
-    def __init__(self, feed: str, registry_dir: str = "", poll_minutes: int = 30, max_wait_hours: int = 12):
+    def __init__(self, feed: str, registry_dir: str = "", poll_minutes: int = 30, max_wait_hours: int = 12,
+                 force: bool = False, stale_after_days: int = 2):
         self.feed, self.registry_dir = feed, registry_dir
         self.poll_minutes, self.max_wait_hours = int(poll_minutes), int(max_wait_hours)
+        self.force, self.stale_after_days = bool(force), int(stale_after_days)
 
     def poll(self, ctx: Context) -> SensorResult:
         try:
@@ -133,6 +139,9 @@ class FeedChangedSensor(Sensor):
             raise
 
     def _poll(self, ctx: Context) -> SensorResult:
+        if self.force:  # a forced reload must not wait for a new version
+            ctx.set_task_value("changed", True)
+            return SensorResult.completed()
         deps = _BUILD(self.feed, self.registry_dir)
         now = _now()
         first = ctx.get_task_value("first_poll_at", default="")  # dbutils rejects default=None for a missing key
@@ -147,6 +156,10 @@ class FeedChangedSensor(Sensor):
             ctx.set_task_value("changed", True)
             return SensorResult.completed()
         if now - dt.datetime.fromisoformat(first) >= dt.timedelta(hours=self.max_wait_hours):
+            last = load_state(deps.storage, self.feed).last_success_at
+            if last is None or now - dt.datetime.fromisoformat(last.replace("Z", "+00:00")) > \
+                    dt.timedelta(days=self.stale_after_days):
+                raise FeedStale(f"{self.feed}: no new version in {self.max_wait_hours} h; last success {last}")
             ctx.set_task_value("changed", False)
             return SensorResult.completed()
         return SensorResult.deferred(duration=dt.timedelta(minutes=self.poll_minutes))

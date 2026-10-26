@@ -82,19 +82,26 @@ def normalized_row(spec: FeedSpec, info: FetchInfo, rec: dict, record_no: int) -
     record_key = None
     if spec.key:
         record_key = json.dumps([_lookup(resolved, k) for k in spec.key])
-    sequence = info.fetched_at
-    if spec.sequence_by and _lookup(resolved, spec.sequence_by) not in (None, ""):
-        sequence = _lookup(resolved, spec.sequence_by)
     valid_from = rec.get("valid_from")
+    seen = _lookup(resolved, spec.sequence_by) if spec.sequence_by else None
+    if seen in (None, ""):
+        seen = None
+    # Order by source time; without a last-seen value use first-seen, never mix in the fetch clock.
+    sequence = seen or valid_from or info.fetched_at
     valid_until = rec.get("valid_until")
     if valid_until is None and spec.expiry.max_age_days:
-        valid_until = _as_datetime(valid_from or info.fetched_at) + timedelta(days=spec.expiry.max_age_days)
+        # Expire from the latest observation (last seen, else this fetch), not from first seen.
+        valid_until = _as_datetime(seen or info.fetched_at) + timedelta(days=spec.expiry.max_age_days)
+    deleted = bool(rec.get("deleted", False))
+    if spec.deletes.startswith("tombstone_field:"):
+        marker = _lookup(resolved, spec.deletes.split(":", 1)[1])
+        deleted = deleted or (marker not in (None, "") and str(marker).lower() not in ("false", "0", "no"))
 
     row = {
         "feed": info.feed, "fetch_id": info.fetch_id, "fetched_at": ts(info.fetched_at),
         "mode": spec.mode, "period": info.period.isoformat() if info.period else None,
         "record_no": record_no, "record_key": record_key, "sequence": ts(sequence),
-        "deleted": bool(rec.get("deleted", False)), "category": spec.category,
+        "deleted": deleted, "category": spec.category,
         "effect": rec.get("effect") or spec.effect, "observable_type": kind, "value": str(value),
         "valid_from": ts(valid_from), "valid_until": ts(valid_until), "attrs": rec.get("attrs") or {},
     }

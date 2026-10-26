@@ -108,3 +108,11 @@ def test_zerobus_encode_matches_the_rest_wire_format():
     assert zerobus_encode(row) == {
         "fetched_at": 1792972800000000, "sequence": 1000002, "valid_from": None, "period": 20752,
         "payload": '{"line": "1.2.3.4"}', "attrs": "{}", "value": "x"}
+
+
+@responses.activate
+def test_retries_connection_errors():  # review #7
+    responses.post(INSERT, body=requests.ConnectionError("reset"))
+    responses.post(INSERT, json={})
+    sink().write(TABLE, [{"v": 1}], fetch_id="f1", day=DAY)
+    assert len(responses.calls) == 2

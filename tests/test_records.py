@@ -53,7 +53,7 @@ def test_normalized_row_fills_typed_column_key_sequence_and_expiry():
     assert all(row[c] is None for c in TYPED_COLUMNS if c != "domain")
     assert row["record_key"] == '["domain", "evil.example"]'
     assert row["sequence"] == "2026-10-25T10:00:00.000000Z"
-    assert row["valid_until"] == "2026-11-19T00:00:00.000000Z"  # valid_from + 30 days
+    assert row["valid_until"] == "2026-11-24T10:00:00.000000Z"  # last_seen + 30 days
     assert row["effect"] == "block" and row["category"] == "ioc" and row["mode"] == "merge"
     assert row["deleted"] is False and row["period"] is None and row["record_no"] == 3
     assert row["attrs"] == {"last_seen": "2026-10-25 10:00:00", "malware": "x"}
@@ -86,3 +86,27 @@ def test_normalized_row_errors(rec, msg):
 def test_missing_sequence_value_falls_back_to_fetched_at():
     row = normalized_row(spec(), INFO, {"value": "x", "observable_type": "ip"}, 0)
     assert row["sequence"] == "2026-10-26T06:30:00.000000Z"
+
+
+def test_merge_expiry_counts_from_last_seen_not_first_seen():  # review #1
+    rec = {"value": "1.2.3.4", "observable_type": "ip", "valid_from": "2022-06-04 00:00:00",
+           "attrs": {"last_seen": "2026-10-20 00:00:00"}}
+    row = normalized_row(spec(), INFO, rec, 0)  # sequence_by=last_seen, max_age_days=30
+    assert row["valid_until"] == "2026-11-19T00:00:00.000000Z"
+
+
+def test_expiry_without_sequence_counts_from_fetch_time():  # review #1
+    rec = {"value": "1.2.3.4", "observable_type": "ip", "valid_from": "2022-06-04 00:00:00", "attrs": {}}
+    row = normalized_row(spec(), INFO, rec, 0)
+    assert row["valid_until"] == "2026-11-25T06:30:00.000000Z"  # fetched_at + 30 days
+
+
+def test_missing_sequence_falls_back_to_source_time_not_fetch_time():  # review #5
+    rec = {"value": "x", "observable_type": "ip", "valid_from": "2026-10-20 00:00:00", "attrs": {}}
+    assert normalized_row(spec(), INFO, rec, 0)["sequence"] == "2026-10-20T00:00:00.000000Z"
+
+
+def test_tombstone_field_marks_rows_deleted():  # review #6
+    s = spec(deletes="tombstone_field:status_removed")
+    assert normalized_row(s, INFO, {"value": "x", "observable_type": "ip", "attrs": {"status_removed": True}}, 0)["deleted"]
+    assert not normalized_row(s, INFO, {"value": "x", "observable_type": "ip", "attrs": {}}, 0)["deleted"]

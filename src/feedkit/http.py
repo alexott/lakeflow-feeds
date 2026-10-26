@@ -48,6 +48,11 @@ def resolve(fetch: Fetch, *, host: str | None, auth_headers: Callable[[], dict] 
     return substitute(fetch.url or "", secret_lookup), headers
 
 
+def _shown(fetch: Fetch) -> str:
+    """The URL as written in the registry (secret references unresolved): safe for logs, manifests, tables."""
+    return f"uc-connection:{fetch.connection}/{(fetch.url or '').lstrip('/')}" if fetch.connection else fetch.url or ""
+
+
 def _retry_after(resp: requests.Response) -> float:
     try:
         return float(resp.headers.get("Retry-After", "60"))
@@ -59,6 +64,7 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
           secret_lookup=None, sleep=time.sleep, attempts: int = 3, timeout: int = 300) -> FetchResult:
     session = session or requests
     url, headers = resolve(fetch, host=host, auth_headers=auth_headers, secret_lookup=secret_lookup)
+    shown = _shown(fetch)
     if fetch.method == "GET" and change_detection == "etag" and state.etag:
         headers["If-None-Match"] = state.etag
     if fetch.method == "GET" and change_detection == "last_modified" and state.last_modified:
@@ -69,11 +75,11 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
             resp = session.request(fetch.method, url, headers=headers, json=substitute_all(fetch.body, secret_lookup),
                                    timeout=timeout)
         except (requests.ConnectionError, requests.Timeout) as e:
-            last_error = str(e)
+            last_error = type(e).__name__  # the exception text can contain the resolved URL
             sleep(2 ** attempt)
             continue
         if resp.status_code == 304:
-            return FetchResult(False, None, state.etag, state.last_modified, state.sha256, url)
+            return FetchResult(False, None, state.etag, state.last_modified, state.sha256, shown)
         if resp.status_code == 429:
             raise RateLimited(_retry_after(resp))
         if resp.status_code >= 500:
@@ -81,14 +87,14 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
             sleep(2 ** attempt)
             continue
         if resp.status_code >= 400:
-            raise FetchError(f"HTTP {resp.status_code} for {url}: {resp.text[:300]}")
+            raise FetchError(f"HTTP {resp.status_code} for {shown}: {resp.text[:300]}")
         content = resp.content
         sha = hashlib.sha256(content).hexdigest()
         etag, last_modified = resp.headers.get("ETag"), resp.headers.get("Last-Modified")
         if change_detection == "content_hash" and sha == state.sha256:
-            return FetchResult(False, None, etag, last_modified, sha, url)
-        return FetchResult(True, content, etag, last_modified, sha, url)
-    raise FetchError(f"giving up on {url} after {attempts} attempts: {last_error}")
+            return FetchResult(False, None, etag, last_modified, sha, shown)
+        return FetchResult(True, content, etag, last_modified, sha, shown)
+    raise FetchError(f"giving up on {shown} after {attempts} attempts: {last_error}")
 
 
 def head(fetch: Fetch, *, session=None, host=None, auth_headers=None, secret_lookup=None,
@@ -101,7 +107,7 @@ def head(fetch: Fetch, *, session=None, host=None, auth_headers=None, secret_loo
     if resp.status_code == 429:
         raise RateLimited(_retry_after(resp))
     if resp.status_code >= 400:
-        raise FetchError(f"HEAD {url}: HTTP {resp.status_code}")
+        raise FetchError(f"HEAD {_shown(fetch)}: HTTP {resp.status_code}")
     return resp.headers.get("ETag"), resp.headers.get("Last-Modified")
 
 

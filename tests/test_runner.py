@@ -184,3 +184,32 @@ def test_canary_missing_fails(tmp_path):
     with pytest.raises(ValidationFailed, match="canary"):
         run(tranco_spec(), PathStorage(tmp_path), MemorySink(),
             FakeFetcher(ok(zipped((2026, 10, 25, 3, 0, 0), "1,a.com\n"))))
+
+
+class ConditionalFetcher:
+    """Honors conditional requests like a real server: same ETag -> 304."""
+
+    def __init__(self, content, etag='"e1"'):
+        self.content, self.etag, self.states = content, etag, []
+
+    def __call__(self, fetch, change_detection, state):
+        self.states.append(state)
+        if state.etag == self.etag:
+            return FetchResult(False, None, state.etag, None, state.sha256, "https://t")
+        return ok(self.content, etag=self.etag)
+
+
+def test_force_bypasses_conditional_requests(tmp_path):  # review #3
+    storage, sink = PathStorage(tmp_path), MemorySink()
+    run(tor_spec(), storage, sink, ConditionalFetcher(lines(3)))
+    assert run(tor_spec(), storage, sink, ConditionalFetcher(lines(3))).status == "not_modified"
+    out = run(tor_spec(), storage, sink, ConditionalFetcher(lines(3)), force=True)
+    assert out.status == "committed" and len(manifests(tmp_path, "tor")) == 2
+
+
+def test_force_accepts_a_large_count_change(tmp_path):  # review #4
+    storage, sink = PathStorage(tmp_path), MemorySink()
+    save_state(storage, "tor", FeedState(last_record_count=100))
+    with pytest.raises(ValidationFailed):
+        run(tor_spec(), storage, sink, FakeFetcher(ok(lines(10))))
+    assert run(tor_spec(), storage, sink, FakeFetcher(ok(lines(10))), force=True).status == "committed"

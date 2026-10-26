@@ -74,7 +74,7 @@ def wired(tmp_path, monkeypatch):
 
     monkeypatch.setattr(integ, "_BUILD", build)
     monkeypatch.setattr(integ, "_now", lambda: NOW)
-    save_state(storage, "tor", FeedState(etag='"a"'))
+    save_state(storage, "tor", FeedState(etag='"a"', last_success_at=(NOW - dt.timedelta(hours=1)).isoformat()))
     return state
 
 
@@ -124,3 +124,19 @@ def test_entry_point_failure_writes_traceback(tmp_path, monkeypatch):
     files = sorted(p.name for p in tmp_path.iterdir())
     assert len(files) == 2 and all(f.startswith("tor-") for f in files)
     assert "boom in build" in (tmp_path / files[0]).read_text()
+
+
+def test_sensor_force_completes_immediately(wired):  # review #3
+    ctx = FakeContext()
+    assert integ.FeedChangedSensor("tor", force=True).poll(ctx).status == "completed"
+    assert ctx.values["changed"] is True
+
+
+def test_sensor_timeout_fails_when_the_feed_is_stale(wired, tmp_path, monkeypatch):  # review #9
+    from feedkit.state import FeedState, save_state
+    storage = integ._BUILD("tor").storage
+    save_state(storage, "tor", FeedState(etag='"a"', last_success_at="2026-10-20T00:00:00.000000Z"))
+    ctx = FakeContext()
+    ctx.values["first_poll_at"] = (NOW - dt.timedelta(hours=13)).isoformat()
+    with pytest.raises(integ.FeedStale, match="tor"):
+        integ.FeedChangedSensor("tor", max_wait_hours=12, stale_after_days=2).poll(ctx)

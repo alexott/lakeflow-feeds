@@ -35,6 +35,8 @@ resources:
       schedule: {quartz_cron_expression: "0 7 * * * ?", timezone_id: UTC}
       tasks:
         - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
           environment_key: feeds_environment
           python_operator_task:
             main: feedkit.integrations.collect_feed
@@ -52,6 +54,8 @@ resources:
       schedule: {quartz_cron_expression: "0 17 * * * ?", timezone_id: UTC}
       tasks:
         - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
           environment_key: feeds_environment
           python_operator_task:
             main: feedkit.integrations.collect_feed
@@ -69,6 +73,8 @@ resources:
       schedule: {quartz_cron_expression: "0 27 * * * ?", timezone_id: UTC}
       tasks:
         - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
           environment_key: feeds_environment
           python_operator_task:
             main: feedkit.integrations.collect_feed
@@ -93,6 +99,7 @@ resources:
               - {name: feed, value: tranco_top1m}
               - {name: poll_minutes, value: "30"}
               - {name: max_wait_hours, value: "12"}
+              - {name: force, value: "{{job.parameters.force}}"}
         - task_key: changed
           depends_on: [{task_key: wait}]
           condition_task:
@@ -101,6 +108,8 @@ resources:
             right: "true"
         - task_key: collect
           depends_on: [{task_key: changed, outcome: "true"}]
+          max_retries: 2
+          min_retry_interval_millis: 300000
           environment_key: feeds_environment
           python_operator_task:
             main: feedkit.integrations.collect_feed

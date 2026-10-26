@@ -107,3 +107,15 @@ def test_load_registry_skips_settings_and_rejects_duplicates(tmp_path):
     write(tmp_path, TOR, "b.yaml")
     with pytest.raises(RegistryError, match="duplicate"):
         load_registry(tmp_path)
+
+
+@pytest.mark.parametrize("value,ok", [("none", True), ("tombstone_field:removed", True),
+                                      ("absent_in_full_fetch", False), ("tombstone", False)])
+def test_deletes_grammar(tmp_path, value, ok):  # review #6
+    text = mutate(TOR, "mode: replace\nhistory: {type: snapshots, retain_days: 90}",
+                  f"mode: merge\nkey: [value]\ndeletes: {value}")
+    if ok:
+        assert load_feed(write(tmp_path, text)).deletes == value
+    else:
+        with pytest.raises(RegistryError, match="deletes"):
+            load_feed(write(tmp_path, text))
