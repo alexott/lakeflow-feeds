@@ -1,0 +1,30 @@
+resources:
+  pipelines:
+    feeds_curated:
+      name: "feeds curated"
+      catalog: cybersecurity
+      schema: feeds
+      serverless: true
+      channel: CURRENT
+      configuration:
+        feeds.catalog: cybersecurity
+      libraries:
+        - file:
+            path: ../pipelines/feeds_curated/feeds_curated.py
+      permissions:
+        # The refresh job runs as the service principal; it needs Run on the pipeline.
+        - service_principal_name: ${var.sp_application_id}
+          level: CAN_RUN
+
+  jobs:
+    feeds_curated_refresh:
+      name: "feeds curated refresh"
+      run_as:
+        service_principal_name: ${var.sp_application_id}
+      max_concurrent_runs: 1
+      tags: {feed: _curated}
+      schedule: {quartz_cron_expression: "0 50 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: refresh
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.feeds_curated.id}
