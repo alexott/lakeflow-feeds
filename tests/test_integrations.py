@@ -109,3 +109,18 @@ def test_collect_feed_runs_the_feed(wired, capsys):
     integ.collect_feed("tor")
     out = capsys.readouterr().out
     assert '"status": "committed"' in out and '"record_count": 1' in out
+
+
+def test_entry_point_failure_writes_traceback(tmp_path, monkeypatch):
+    def broken_build(feed, registry_dir=""):
+        raise RuntimeError("boom in build")
+
+    monkeypatch.setattr(integ, "_BUILD", broken_build)
+    monkeypatch.setattr(integ, "ERROR_DIR", str(tmp_path))
+    with pytest.raises(RuntimeError, match="boom"):
+        integ.collect_feed("tor")
+    with pytest.raises(RuntimeError, match="boom"):
+        integ.FeedChangedSensor("tor").poll(FakeContext())
+    files = sorted(p.name for p in tmp_path.iterdir())
+    assert len(files) == 2 and all(f.startswith("tor-") for f in files)
+    assert "boom in build" in (tmp_path / files[0]).read_text()

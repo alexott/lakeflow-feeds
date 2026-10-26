@@ -31,4 +31,8 @@ class FakeContext:
         self.values[key] = value
 
     def get_task_value(self, key, default=None):
+        # Mirrors dbutils.jobs.taskValues.get in a job run (verified 2026-10-26): a missing key with
+        # default=None raises "No task values with key ... default cannot be None."
+        if key not in self.values and default is None:
+            raise ValueError(f'No task values with key "{key}" were found. default cannot be None.')
         return self.values.get(key, default)

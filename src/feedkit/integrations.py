@@ -71,6 +71,20 @@ def build_deps(feed: str, registry_dir: str = "") -> Deps:
 
 
 _BUILD = build_deps
+# Operator stdout is not returned by the Jobs API, so failures also leave a traceback file here.
+ERROR_DIR = "/Volumes/cybersecurity/feeds/state/_errors"
+
+
+def _record_error(feed: str) -> None:
+    import os
+    import traceback
+    try:
+        os.makedirs(ERROR_DIR, exist_ok=True)
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        with open(f"{ERROR_DIR}/{feed}-{stamp}.txt", "w") as f:
+            f.write(traceback.format_exc())
+    except OSError:
+        pass
 
 
 def _now() -> dt.datetime:
@@ -93,9 +107,13 @@ def has_new_version(spec: FeedSpec, storage: Storage, head_fn, now: dt.datetime)
 @integration(display_name="Collect a security feed",
              description="Fetch, transform, validate, and land one feed from the feed registry.")
 def collect_feed(feed: str, registry_dir: str = "", force: bool = False) -> None:
-    deps = _BUILD(feed, registry_dir)
-    outcome = run_feed(deps.spec, settings=deps.settings, storage=deps.storage, sink=deps.sink,
-                       fetcher=deps.fetcher, now=_now(), force=force)
+    try:
+        deps = _BUILD(feed, registry_dir)
+        outcome = run_feed(deps.spec, settings=deps.settings, storage=deps.storage, sink=deps.sink,
+                           fetcher=deps.fetcher, now=_now(), force=force)
+    except Exception:
+        _record_error(feed)
+        raise
     print(json.dumps({"feed": feed, **asdict(outcome)}, default=str))
 
 
@@ -107,10 +125,17 @@ class FeedChangedSensor(Sensor):
         self.poll_minutes, self.max_wait_hours = int(poll_minutes), int(max_wait_hours)
 
     def poll(self, ctx: Context) -> SensorResult:
+        try:
+            return self._poll(ctx)
+        except Exception:
+            _record_error(self.feed)
+            raise
+
+    def _poll(self, ctx: Context) -> SensorResult:
         deps = _BUILD(self.feed, self.registry_dir)
         now = _now()
-        first = ctx.get_task_value("first_poll_at")
-        if first is None:
+        first = ctx.get_task_value("first_poll_at", default="")  # dbutils rejects default=None for a missing key
+        if not first:
             first = now.isoformat()
             ctx.set_task_value("first_poll_at", first)
         try:
