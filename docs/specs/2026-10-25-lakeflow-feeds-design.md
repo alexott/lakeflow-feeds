@@ -1,6 +1,6 @@
 # Lakeflow feeds: lightweight collection of security context and threat-intel data — design
 
-Status: approved in conversation 2026-10-25; awaiting written-spec review.
+Status: approved (conversation 2026-10-25, written spec approved 2026-10-26).
 Workspace: `az-alexott` (SQL warehouse "Cybersecurity" `3b70a3031825736c`, Lakewatch v2 catalog `lwv2_aottdb`).
 Subproject directory: `vibe-place/lakeflow-feeds/`.
 
