@@ -44,7 +44,7 @@ def main(argv=None) -> int:
             print(f"FAILED: {first}\n  {r.status.error.message if r.status.error else r.status.state}")
             return 1
         print(f"ok: {first}")
-        for row in (r.result.data_array or [])[:20] if r.result else []:
+        for row in (r.result.data_array or [])[:200] if r.result else []:
             print("   ", row)
     return 0
 

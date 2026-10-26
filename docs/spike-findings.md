@@ -1,6 +1,6 @@
 # Lakeflow feeds — phase 0 spike findings
 
-Status: **partial** (2026-10-26). S1, S2, S4, S5, and S7 are answered. S3 billing and S6 cost need at least 3 days of scheduled runs; run `lakeflow-feeds/scripts/cost_by_feed.sql` after 2026-10-29 and fill in the open sections.
+Status: **partial** (2026-10-26). S1, S2, S3, S4, S5, and S7 are answered. S6 cost has first numbers from one hour; run `lakeflow-feeds/scripts/cost_by_feed.py` after 2026-10-29 and finish it.
 
 - Workspace: az-alexott (`adb-6688808130562317`, westeurope). Lakewatch catalog `lwv2_aottdb`.
 - Bundle `lakeflow_feeds`, target `spike`, branch `lakeflow-feeds-design`.
@@ -33,7 +33,7 @@ From the probe report (run 173430919737901, file `/Volumes/cybersecurity/feeds/s
 
 - The sensor works: on a new day it completes at once (31 s), and the condition task runs collect. On a day that is already committed it stays deferred (run 382415910820255; the run shows `RUNNING` while deferred), and we cancelled it after 4 minutes.
 - `Context.get_task_value(key)` raises an error for a missing key when `default` is None. This is the `dbutils.jobs.taskValues` rule. The sensor passes `default=""`.
-- Open: billing during the deferred wait (does the deferral release compute?). Check `system.billing.usage` for job 598951998291234 around 2026-10-26 10:35–10:40 UTC.
+- Billing during a deferred wait (answered 2026-10-26): the deferred run 382415910820255 lasted 249 s but billed 0.0115 DBU. The sensor run 142042097798880, which did not defer, lasted 48 s and billed 0.0147 DBU. So the deferral did not hold compute. This matches the preview guide: a deferral longer than 1 minute releases compute (environment version 5 or later).
 
 ### S4 — UC HTTP connection from the operator
 
@@ -50,7 +50,27 @@ From the probe report (run 173430919737901, file `/Volumes/cybersecurity/feeds/s
 
 ### S6 — Cost
 
-Open. Run the cost query after 3 days. Run durations so far: Tor collect 30 s, Feodo 39 s, ThreatFox 44 s, Tranco wait 31 s + collect 482 s, SDP refresh 106 s, Lakewatch datasource 129 s.
+Partial (2026-10-26). Billing for workspace 6688808130562317 is complete only up to 11:00 UTC, so these numbers cover one hour (10:00–11:00 UTC). That hour also has spike work in it: 3 probe runs, 2 failed sensor runs, and the first loads. Run `lakeflow-feeds/scripts/cost_by_feed.py` again after 2026-10-29. List price: $0.50 per DBU (`PREMIUM_JOBS_SERVERLESS_COMPUTE_EU_WEST`).
+
+How billing works for this project:
+
+- `system.billing.usage` is account-wide. Always filter on `workspace_id`.
+- Operator runs bill as `JOBS` under their own `job_id`, `job_run_id`, and job name. We did not see the `"Lakeflow Integrations"` job name that the preview guide describes. The query matches both spellings.
+- Runs of the same service principal share compute. A run that starts while another run still has the compute gets no billing rows. Its usage goes to the run that got the compute first (preview guide). We saw this: the two Feodo runs at 10:17 started 10 s after Tor ended and have no rows (that Tor run billed 0.030 DBU, against 0.010–0.013 for the other Tor runs). The ThreatFox run at 10:27 ran during the Tranco collect and has no rows either. So per-feed job cost must be split by run time (statement 2 of the cost query), not read from the billed rows.
+- Job tags (`feed`) do not appear in `custom_tags` on serverless. The query joins `system.lakeflow.jobs` to get the tags.
+- Zerobus bills as `LAKEFLOW_CONNECT`, `usage_type = PROCESSED_GB` (unit DBU), with `usage_metadata.table_id` and `product_features.lakeflow_connect.zerobus_request_type = HTTP`. No system table maps `table_id` to a name; `cost_by_feed.py` gets the mapping from the UC API.
+- Both `system.billing.usage` and `system.lakeflow.job_run_timeline` lag by hours.
+
+First numbers (10:00–11:00 UTC):
+
+| Part | DBU | Notes |
+|---|---|---|
+| Feed jobs (operators) | 0.21 | A short collect run is 0.010–0.015 DBU (about $0.005–0.008). Tranco wait + collect: 0.14–0.16 DBU. Includes 0.035 DBU of probe runs. |
+| SDP `feeds curated` | 0.64 | 2 refreshes (97 s and 98 s) + 1 failed start: about 0.3 DBU per refresh. At one refresh per hour, that is about 7 DBU ($3.6) per day. This is the largest part so far. |
+| Lakewatch datasource `feeds_context` | 0.37 | The first run (10:46, with `include_existing_rows`). Hourly runs since then are not billed yet. |
+| Zerobus ingest | 0.13 | Almost all of it is the Tranco 1M load (raw table 0.044 + records). Small feeds: about 0.001 DBU per fetch. |
+
+Early conclusion, to confirm with 3 days of data: the views tier costs almost nothing, and the hourly SDP refresh costs more than all the feed jobs together. If the numbers hold, make views the default tier and refresh SDP only when an append or replace feed commits (or daily).
 
 ### S7 — VARIANT and TIMESTAMP through REST
 
