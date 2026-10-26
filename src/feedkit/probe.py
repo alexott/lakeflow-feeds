@@ -27,6 +27,16 @@ def run_checks(checks: dict[str, Callable[[], object]]) -> dict[str, dict]:
     return report
 
 
+def write_report(report: dict, report_dir: str) -> str:
+    """Write the report as JSON (run output of operator tasks is not returned by the Jobs API)."""
+    import datetime as dt
+    os.makedirs(report_dir, exist_ok=True)
+    path = f"{report_dir}/probe-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S}.json"
+    with open(path, "w") as f:
+        f.write(json.dumps(report, indent=2, default=str))
+    return path
+
+
 def _spark():
     from pyspark.sql import SparkSession
     s = SparkSession.getActiveSession()
@@ -72,7 +82,8 @@ def _connection(name, path):
 
 
 @integration(display_name="Feeds runtime probe", description="Spike: report what the operator runtime can do.")
-def probe_runtime(hosts: list = None, connection: str = "", connection_path: str = "headers") -> None:
+def probe_runtime(hosts: list = None, connection: str = "", connection_path: str = "headers",
+                  report_dir: str = "/Volumes/cybersecurity/feeds/state/_probe") -> None:
     checks: dict[str, Callable[[], object]] = {
         "python": platform.python_version,
         "spark": _spark,
@@ -84,4 +95,9 @@ def probe_runtime(hosts: list = None, connection: str = "", connection_path: str
         checks[f"head {url}"] = lambda url=url: _head(url)
     if connection:
         checks[f"connection {connection}"] = lambda: _connection(connection, connection_path)
-    print(json.dumps(run_checks(checks), indent=2, default=str))
+    report = run_checks(checks)
+    print(json.dumps(report, indent=2, default=str))
+    try:
+        print("report written to", write_report(report, report_dir))
+    except OSError as e:
+        print("could not write the report:", e)
