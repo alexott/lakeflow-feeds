@@ -1,0 +1,71 @@
+description: >-
+  Generic parser for the Lakeflow feeds normalized records (cybersecurity.feeds_raw.records).
+  One row per indicator. Only merge-mode feeds (IoC feeds) match; reference snapshots are dropped.
+fields:
+  - name: feed
+    type: STRING
+    required: true
+    comment: Feed name from the lakeflow-feeds registry.
+  - name: mode
+    type: STRING
+    required: true
+    validate:
+      in: [merge]
+    comment: Ingest mode; the parser claims only merge rows.
+  - name: fetch_id
+    type: STRING
+    comment: Fetch that wrote the row.
+  - name: category
+    type: STRING
+  - name: effect
+    type: STRING
+    comment: allow | enrich | never_allow | block.
+  - name: indicator_type
+    type: STRING
+  - name: tlp
+    type: STRING
+  - name: tags
+    type: ARRAY
+    element:
+      type: STRING
+  - name: score
+    type: DOUBLE
+  - name: observable_type
+    type: STRING
+    comment: Lakewatch observable kind of the value.
+  - name: value
+    type: STRING
+    required: true
+  - name: ip
+    type: STRING
+    observables: [ip]
+  - name: cidr
+    type: STRING
+    observables: [net_addr]
+  - name: domain
+    type: STRING
+    observables: [domain]
+  - name: url
+    type: STRING
+    observables: [url]
+  - name: hash
+    type: STRING
+    observables: [hash]
+  - name: email
+    type: STRING
+    observables: [email]
+  - name: cve
+    type: STRING
+    observables: [cve]
+  - name: valid_until
+    type: TIMESTAMP
+    time_formats: ["#rfc3339"]
+  - name: attrs
+    type: VARIANT
+    comment: Feed-specific fields.
+time:
+  coalesce:
+    - path: valid_from
+      time_formats: ["#rfc3339"]
+    - path: fetched_at
+      time_formats: ["#rfc3339"]
