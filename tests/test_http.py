@@ -228,3 +228,12 @@ def test_pagination_resolves_relative_next_links():  # OTX returns "/export?...&
     responses.get("https://api.example.test/v1/export?modified_since=x&page=2", json={"results": [{"i": 2}], "next": None})
     r = fetch(cursor_fetch(), "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW)
     assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}]}
+
+
+@responses.activate
+def test_cursor_start_is_capped_by_max_lookback():  # OTX: > 100k indicators per window is refused
+    responses.get(API, json={"results": [], "next": None},
+                  match=[responses.matchers.query_param_matcher({"modified_since": "2026-10-26T00:00:00+00:00"})])
+    f = cursor_fetch(cursor={"param": "modified_since", "first_lookback_hours": 12, "overlap_minutes": 60,
+                             "max_lookback_hours": 12})
+    fetch(f, "none", FeedState(cursor="2026-10-20T00:00:00+00:00"), now=NOW)  # stale cursor after an outage

@@ -78,6 +78,8 @@ def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None
         now = now or datetime.now(timezone.utc)
         start = (datetime.fromisoformat(state.cursor) - timedelta(minutes=fetch.cursor.overlap_minutes)) \
             if state.cursor else now - timedelta(hours=fetch.cursor.first_lookback_hours)
+        if fetch.cursor.max_lookback_hours is not None:
+            start = max(start, now - timedelta(hours=fetch.cursor.max_lookback_hours))
         params, new_cursor = {fetch.cursor.param: start.isoformat()}, now.isoformat()
     if fetch.pagination:
         pages = _paginate(fetch, session, url, headers, params, body, shown, sleep, attempts, timeout,

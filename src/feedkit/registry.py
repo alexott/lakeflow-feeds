@@ -35,6 +35,9 @@ class Cursor(_Model):
     param: str  # query parameter that takes the cursor (ISO-8601), e.g. modified_since
     first_lookback_hours: int = 24
     overlap_minutes: int = 60
+    # Never query further back than this (APIs cap a window, e.g. OTX refuses > 100k indicators); after a
+    # long outage the gap beyond it is skipped rather than failing forever.
+    max_lookback_hours: int | None = None
 
 
 class Fetch(_Model):

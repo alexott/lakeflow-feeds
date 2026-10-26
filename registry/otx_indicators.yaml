@@ -8,9 +8,11 @@ fetch:
   url: https://otx.alienvault.com/api/v1/indicators/export
   format: json
   headers: {X-OTX-API-KEY: "{{secrets/otx/api_key}}"}
-  # Same window logic as the filebeat module: first run 400 h back, then from the last commit (1 h overlap).
-  cursor: {param: modified_since, first_lookback_hours: 400, overlap_minutes: 60}
-  pagination: {next: next, records: results, max_pages: 300}
+  # From the last commit with 1 h overlap. OTX refuses more than 100,000 indicators per window
+  # (about 24 h of data), so the window never starts more than 12 h back (first run and after outages);
+  # older history is in the filebeat-loaded cybersecurity.threatintel.iocs. 1,000 items per page.
+  cursor: {param: modified_since, first_lookback_hours: 12, overlap_minutes: 60, max_lookback_hours: 12}
+  pagination: {next: next, records: results, max_pages: 95}
 change_detection: none
 schedule: {every: 1h}
 sink: zerobus
