@@ -14,7 +14,8 @@ fetch:
   cursor: {param: modified_since, first_lookback_hours: 12, overlap_minutes: 60, max_lookback_hours: 12}
   # One series per type, so a burst in one type (seen: 109k URLs from one pulse update) cannot block the
   # others; a type over 95 pages is truncated (manifest truncated: true) instead of failing every run.
-  pagination: {next: next, records: results, max_pages: 95, on_limit: truncate}
+  pagination: {next: next, records: results, max_pages: 95, on_limit: truncate,
+               page_delay_seconds: 1, rate_limit_retries: 10}
   split_by:
     param: types
     values: [IPv4, IPv6, domain, hostname, URL, URI, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, CIDR, email, CVE]

@@ -141,23 +141,30 @@ def _paginate(fetch: Fetch, session, url, headers, params, body, shown, sleep, a
               max_retry_after) -> tuple[list, bool]:
     """Follow the next-page links; any failure (or too many pages) fails the fetch, so the cursor stays put."""
     items: list = []
-    for page in range(fetch.pagination.max_pages):
-        for attempt in range(attempts):
+    limits = fetch.pagination
+    for page in range(limits.max_pages):
+        if page and limits.page_delay_seconds:
+            sleep(limits.page_delay_seconds)
+        attempt, throttled = 0, 0
+        while True:
             try:
                 resp = _send(session, fetch, url, headers, params, body, timeout)
             except (requests.ConnectionError, requests.Timeout) as e:
                 if attempt == attempts - 1:
                     raise FetchError(f"{shown} page {page + 1}: {type(e).__name__}") from None
                 sleep(2 ** attempt)
+                attempt += 1
                 continue
-            if resp.status_code == 429:
+            if resp.status_code == 429:  # its own budget: long crawls get throttled, not broken
                 wait = _retry_after(resp)
-                if wait > max_retry_after or attempt == attempts - 1:
+                if wait > max_retry_after or throttled >= limits.rate_limit_retries:
                     raise RateLimited(wait)
                 sleep(wait)
+                throttled += 1
                 continue
             if resp.status_code >= 500 and attempt < attempts - 1:
                 sleep(2 ** attempt)
+                attempt += 1
                 continue
             if resp.status_code >= 300:
                 raise FetchError(f"HTTP {resp.status_code} for {shown} page {page + 1}: {resp.text[:300]}")

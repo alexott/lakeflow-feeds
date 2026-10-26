@@ -32,6 +32,8 @@ class Pagination(_Model):
     # fail: too many pages fails the fetch (cursor stays). truncate: keep what was read and mark the
     # manifest truncated (for APIs that refuse large windows, e.g. OTX bursts of > 100k indicators).
     on_limit: Literal["fail", "truncate"] = "fail"
+    page_delay_seconds: float = 0.0  # pause between pages (APIs that rate-limit long crawls, e.g. OTX)
+    rate_limit_retries: int = 3  # 429 retries per page (each waits Retry-After, default 30 s)
 
 
 class SplitBy(_Model):

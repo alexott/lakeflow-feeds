@@ -257,3 +257,17 @@ def test_truncate_keeps_items_and_marks_the_result():
     f = cursor_fetch(pagination={"next": "next", "records": "results", "max_pages": 3, "on_limit": "truncate"})
     r = fetch(f, "none", FeedState(), now=NOW)
     assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}, {"i": 3}]} and r.truncated
+
+
+@responses.activate
+def test_pagination_has_its_own_rate_limit_budget_and_page_delay():
+    for _ in range(4):
+        responses.get(API, status=429)
+    responses.get(API, json={"results": [{"i": 1}], "next": API + "?page=2"})
+    responses.get(API + "?page=2", json={"results": [{"i": 2}], "next": None})
+    f = cursor_fetch(pagination={"next": "next", "records": "results", "max_pages": 5,
+                                 "rate_limit_retries": 5, "page_delay_seconds": 1.5})
+    slept = []
+    r = fetch(f, "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW, sleep=slept.append)
+    assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}]}
+    assert slept.count(30.0) == 4 and slept.count(1.5) == 1  # four 429 waits, one delay between pages
