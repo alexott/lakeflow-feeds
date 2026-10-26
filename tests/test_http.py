@@ -220,3 +220,11 @@ def test_pagination_over_max_pages_fails_so_the_cursor_does_not_advance():
         responses.get(API if p == 1 else f"{API}?page={p}", json={"results": [{"i": p}], "next": f"{API}?page={p + 1}"})
     with pytest.raises(FetchError, match="max_pages"):
         fetch(cursor_fetch(), "none", FeedState(), now=NOW)
+
+
+@responses.activate
+def test_pagination_resolves_relative_next_links():  # OTX returns "/export?...&page=2"
+    responses.get(API, json={"results": [{"i": 1}], "next": "/v1/export?modified_since=x&page=2"})
+    responses.get("https://api.example.test/v1/export?modified_since=x&page=2", json={"results": [{"i": 2}], "next": None})
+    r = fetch(cursor_fetch(), "none", FeedState(cursor="2026-10-26T11:00:00+00:00"), now=NOW)
+    assert _json.loads(r.content) == {"results": [{"i": 1}, {"i": 2}]}

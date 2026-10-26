@@ -65,6 +65,26 @@ resources:
               - {name: registry_dir, value: "${workspace.file_path}/registry"}
               - {name: force, value: "{{job.parameters.force}}"}
 
+    feed_otx_indicators:
+      name: "feed otx_indicators"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: otx_indicators}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 52 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: otx_indicators}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
     feed_urlhaus_urls:
       name: "feed urlhaus_urls"
       <<: [*env, *run_as]

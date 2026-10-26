@@ -57,4 +57,9 @@ CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.malwarebazaar_recent (
   record_no BIGINT, record_type STRING, payload VARIANT
 ) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed malwarebazaar_recent (replay source).';
 
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.otx_indicators (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed otx_indicators (replay source).';
+
 SHOW TABLES IN {{catalog}}.{{raw_schema}};

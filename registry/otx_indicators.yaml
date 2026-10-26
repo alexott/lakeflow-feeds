@@ -1,0 +1,36 @@
+name: otx_indicators
+mode: merge
+key: [observable_type, value]
+category: ioc
+effect: block
+fetch:
+  operator: http_snapshot
+  url: https://otx.alienvault.com/api/v1/indicators/export
+  format: json
+  headers: {X-OTX-API-KEY: "{{secrets/otx/api_key}}"}
+  # Same window logic as the filebeat module: first run 400 h back, then from the last commit (1 h overlap).
+  cursor: {param: modified_since, first_lookback_hours: 400, overlap_minutes: 60}
+  pagination: {next: next, records: results, max_pages: 300}
+change_detection: none
+schedule: {every: 1h}
+sink: zerobus
+curation: views
+targets: [tables, datasource]
+transform:
+  - records: "results[]"
+  - map:
+      field: type
+      to: observable_type
+      values: {IPv4: ip, IPv6: ip, domain: domain, hostname: hostname, URL: url, URI: url,
+               FileHash-MD5: hash, FileHash-SHA1: hash, FileHash-SHA256: hash, CIDR: net_addr,
+               email: email, CVE: cve}
+      default: drop
+  - apply: {indicator: [trim]}
+  - drop_if_empty: [indicator]
+  - output:
+      value: indicator
+      observable_type: observable_type
+      attrs: {otx_id: id, otx_type: type, title: title, description: description}
+validate: {min_records: 0}
+expiry: {max_age_days: 90}
+license: "AlienVault OTX (LevelBlue), OTX terms of use (https://otx.alienvault.com/)"

@@ -1,0 +1,71 @@
+{
+ "count": 8,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "id": 4142323634,
+   "indicator": "CVE-2025-54236",
+   "type": "CVE",
+   "title": null,
+   "description": null,
+   "content": ""
+  },
+  {
+   "id": 4457916898,
+   "indicator": "CVE-2026-48356",
+   "type": "CVE",
+   "title": null,
+   "description": null,
+   "content": ""
+  },
+  {
+   "id": 4492524163,
+   "indicator": "CVE-2026-75650",
+   "type": "CVE",
+   "title": null,
+   "description": null,
+   "content": ""
+  },
+  {
+   "id": 4545716025,
+   "indicator": "http://deepveindrilling.com",
+   "type": "URL",
+   "title": null,
+   "description": null,
+   "content": ""
+  },
+  {
+   "id": 4545716026,
+   "indicator": "https://additionalver.com/Mb2z8J",
+   "type": "URL",
+   "title": null,
+   "description": null,
+   "content": ""
+  },
+  {
+   "id": 4545716027,
+   "indicator": "https://additionalver.com/Mb2z8J?&se_referrer=",
+   "type": "URL",
+   "title": null,
+   "description": null,
+   "content": ""
+  },
+  {
+   "id": 1,
+   "indicator": "203.0.113.7",
+   "type": "IPv4",
+   "title": null,
+   "description": "fixture: documentation range",
+   "content": ""
+  },
+  {
+   "id": 2,
+   "indicator": "fixture-mutex",
+   "type": "Mutex",
+   "title": null,
+   "description": "fixture: unmapped type is dropped",
+   "content": ""
+  }
+ ]
+}

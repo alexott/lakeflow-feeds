@@ -9,6 +9,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
+from urllib.parse import urljoin
 
 import jmespath
 import requests
@@ -154,7 +155,7 @@ def _paginate(fetch: Fetch, session, url, headers, params, body, shown, sleep, a
         nxt = jmespath.search(fetch.pagination.next, doc)
         if not nxt:
             return items
-        url, params = nxt, None  # the next link already carries the query
+        url, params = urljoin(url, nxt), None  # the next link carries the query; it may be relative (OTX)
     raise FetchError(f"{shown}: more than max_pages={fetch.pagination.max_pages} pages; widen max_pages or poll more often")
 
 

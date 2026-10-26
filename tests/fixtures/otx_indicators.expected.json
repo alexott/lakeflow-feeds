@@ -1,0 +1,72 @@
+[
+ {
+  "attrs": {
+   "description": null,
+   "otx_id": 4142323634,
+   "otx_type": "CVE",
+   "title": null
+  },
+  "observable_type": "cve",
+  "value": "CVE-2025-54236"
+ },
+ {
+  "attrs": {
+   "description": null,
+   "otx_id": 4457916898,
+   "otx_type": "CVE",
+   "title": null
+  },
+  "observable_type": "cve",
+  "value": "CVE-2026-48356"
+ },
+ {
+  "attrs": {
+   "description": null,
+   "otx_id": 4492524163,
+   "otx_type": "CVE",
+   "title": null
+  },
+  "observable_type": "cve",
+  "value": "CVE-2026-75650"
+ },
+ {
+  "attrs": {
+   "description": null,
+   "otx_id": 4545716025,
+   "otx_type": "URL",
+   "title": null
+  },
+  "observable_type": "url",
+  "value": "http://deepveindrilling.com"
+ },
+ {
+  "attrs": {
+   "description": null,
+   "otx_id": 4545716026,
+   "otx_type": "URL",
+   "title": null
+  },
+  "observable_type": "url",
+  "value": "https://additionalver.com/Mb2z8J"
+ },
+ {
+  "attrs": {
+   "description": null,
+   "otx_id": 4545716027,
+   "otx_type": "URL",
+   "title": null
+  },
+  "observable_type": "url",
+  "value": "https://additionalver.com/Mb2z8J?&se_referrer="
+ },
+ {
+  "attrs": {
+   "description": "fixture: documentation range",
+   "otx_id": 1,
+   "otx_type": "IPv4",
+   "title": null
+  },
+  "observable_type": "ip",
+  "value": "203.0.113.7"
+ }
+]

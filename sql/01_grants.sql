@@ -10,6 +10,7 @@ GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.threatfox_recent TO `{{
 GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.urlhaus_urls TO `{{sp}}`;
 GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.urlhaus_payloads TO `{{sp}}`;
 GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.malwarebazaar_recent TO `{{sp}}`;
+GRANT SELECT, MODIFY ON TABLE {{catalog}}.{{raw_schema}}.otx_indicators TO `{{sp}}`;
 GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.landing TO `{{sp}}`;
 GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.manifests TO `{{sp}}`;
 GRANT READ VOLUME, WRITE VOLUME ON VOLUME {{catalog}}.{{schema}}.state TO `{{sp}}`;

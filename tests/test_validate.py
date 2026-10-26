@@ -65,3 +65,9 @@ def test_all_reasons_are_reported():
 
 def test_skip_change_check_when_forced():  # review #4
     check(spec("merge"), recs(500), last_count=5, skip_change=True)
+
+
+def test_change_check_is_skipped_for_cursor_feeds():
+    s = spec("merge").model_copy(update={"fetch": spec("merge").fetch.model_copy(
+        update={"cursor": {"param": "modified_since"}})})
+    check(s, recs(10), last_count=100000)  # an incremental window size says nothing about the source
