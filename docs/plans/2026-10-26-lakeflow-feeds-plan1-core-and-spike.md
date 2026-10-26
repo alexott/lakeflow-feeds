@@ -515,6 +515,7 @@ Expected: `15 passed`
 cd lakeflow-feeds
 /usr/bin/git add src/feedkit/registry.py tests/test_registry.py
 /usr/bin/git commit -m "Add the feed registry model and validator rules" -m "Co-authored-by: Isaac <no-reply@databricks.com>"
+```
 
 ### Task 3: Record contracts
 
@@ -761,6 +762,7 @@ Expected: `9 passed`
 cd lakeflow-feeds
 /usr/bin/git add src/feedkit/records.py tests/test_records.py
 /usr/bin/git commit -m "Add the raw and normalized record contracts" -m "Co-authored-by: Isaac <no-reply@databricks.com>"
+```
 
 ### Task 4: Transform engine
 
@@ -1260,6 +1262,7 @@ Expected: `22 passed`
 cd lakeflow-feeds
 /usr/bin/git add src/feedkit/transform.py tests/test_transform.py tests/custom_fn.py
 /usr/bin/git commit -m "Add the declarative per-feed transform engine" -m "Co-authored-by: Isaac <no-reply@databricks.com>"
+```
 
 ### Task 5: Storage, state file, and manifests
 
