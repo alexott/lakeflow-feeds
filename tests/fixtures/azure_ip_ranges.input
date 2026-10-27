@@ -1,0 +1,72 @@
+{
+ "changeNumber": 423,
+ "cloud": "Public",
+ "values": [
+  {
+   "name": "ActionGroup",
+   "id": "ActionGroup",
+   "properties": {
+    "changeNumber": 60,
+    "region": "",
+    "regionId": 0,
+    "platform": "Azure",
+    "systemService": "ActionGroup",
+    "addressPrefixes": [
+     "4.145.74.52/30",
+     "4.149.254.68/30",
+     "2603:1000:4::10c/126",
+     "2603:1000:0004:0000::/64",
+     "not-a-cidr"
+    ],
+    "networkFeatures": [
+     "API",
+     "NSG",
+     "UDR",
+     "FW"
+    ]
+   }
+  },
+  {
+   "name": "AzureCloud.westeurope",
+   "id": "AzureCloud.westeurope",
+   "properties": {
+    "changeNumber": 202,
+    "region": "westeurope",
+    "regionId": 18,
+    "platform": "Azure",
+    "systemService": "",
+    "addressPrefixes": [
+     "4.175.0.0/16",
+     "4.180.0.0/16",
+     "2603:1020:200::/46"
+    ],
+    "networkFeatures": [
+     "API",
+     "NSG"
+    ]
+   }
+  },
+  {
+   "name": "Storage.WestEurope",
+   "id": "Storage.WestEurope",
+   "properties": {
+    "changeNumber": 44,
+    "region": "westeurope",
+    "regionId": 18,
+    "platform": "Azure",
+    "systemService": "AzureStorage",
+    "addressPrefixes": [
+     "13.69.40.16/28",
+     "13.95.96.176/28",
+     "2603:1020:207::/48"
+    ],
+    "networkFeatures": [
+     "API",
+     "NSG",
+     "UDR",
+     "FW"
+    ]
+   }
+  }
+ ]
+}

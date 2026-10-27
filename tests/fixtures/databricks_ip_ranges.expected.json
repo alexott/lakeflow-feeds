@@ -1,0 +1,132 @@
+[
+ {
+  "attrs": {
+   "cloud": "aws",
+   "direction": "inbound",
+   "provider": "databricks",
+   "region": "ap-northeast-1",
+   "service": "Databricks"
+  },
+  "value": "18.99.67.176/28"
+ },
+ {
+  "attrs": {
+   "cloud": "aws",
+   "direction": "inbound",
+   "provider": "databricks",
+   "region": "ap-northeast-1",
+   "service": "Databricks"
+  },
+  "value": "35.72.28.0/28"
+ },
+ {
+  "attrs": {
+   "cloud": "aws",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "ap-northeast-1",
+   "service": "Databricks"
+  },
+  "value": "18.177.16.95/32"
+ },
+ {
+  "attrs": {
+   "cloud": "aws",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "ap-northeast-1",
+   "service": "Databricks"
+  },
+  "value": "35.72.28.0/28"
+ },
+ {
+  "attrs": {
+   "cloud": "aws",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "ap-northeast-1",
+   "service": "Databricks"
+  },
+  "value": "2600:1f18::/36"
+ },
+ {
+  "attrs": {
+   "cloud": "azure",
+   "direction": "inbound",
+   "provider": "databricks",
+   "region": "australiacentral",
+   "service": "Databricks"
+  },
+  "value": "13.75.218.172/32"
+ },
+ {
+  "attrs": {
+   "cloud": "azure",
+   "direction": "inbound",
+   "provider": "databricks",
+   "region": "australiacentral",
+   "service": "Databricks"
+  },
+  "value": "20.70.34.64/28"
+ },
+ {
+  "attrs": {
+   "cloud": "azure",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "australiacentral",
+   "service": "Databricks"
+  },
+  "value": "13.70.105.50/32"
+ },
+ {
+  "attrs": {
+   "cloud": "azure",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "australiacentral",
+   "service": "Databricks"
+  },
+  "value": "20.11.26.96/29"
+ },
+ {
+  "attrs": {
+   "cloud": "gcp",
+   "direction": "inbound",
+   "provider": "databricks",
+   "region": "asia-northeast1",
+   "service": "Databricks"
+  },
+  "value": "34.146.146.176/28"
+ },
+ {
+  "attrs": {
+   "cloud": "gcp",
+   "direction": "inbound",
+   "provider": "databricks",
+   "region": "asia-northeast1",
+   "service": "Databricks"
+  },
+  "value": "34.146.235.35/32"
+ },
+ {
+  "attrs": {
+   "cloud": "gcp",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "asia-northeast1",
+   "service": "Databricks"
+  },
+  "value": "34.146.146.176/28"
+ },
+ {
+  "attrs": {
+   "cloud": "gcp",
+   "direction": "outbound",
+   "provider": "databricks",
+   "region": "asia-northeast1",
+   "service": "Databricks"
+  },
+  "value": "34.146.86.3/32"
+ }
+]

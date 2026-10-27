@@ -1,0 +1,92 @@
+[
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": null,
+   "service": "ActionGroup",
+   "system_service": "ActionGroup"
+  },
+  "value": "4.145.74.52/30"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": null,
+   "service": "ActionGroup",
+   "system_service": "ActionGroup"
+  },
+  "value": "4.149.254.68/30"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": null,
+   "service": "ActionGroup",
+   "system_service": "ActionGroup"
+  },
+  "value": "2603:1000:4::10c/126"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": null,
+   "service": "ActionGroup",
+   "system_service": "ActionGroup"
+  },
+  "value": "2603:1000:4::/64"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": "westeurope",
+   "service": "AzureCloud.westeurope",
+   "system_service": null
+  },
+  "value": "4.175.0.0/16"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": "westeurope",
+   "service": "AzureCloud.westeurope",
+   "system_service": null
+  },
+  "value": "4.180.0.0/16"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": "westeurope",
+   "service": "AzureCloud.westeurope",
+   "system_service": null
+  },
+  "value": "2603:1020:200::/46"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": "westeurope",
+   "service": "Storage.WestEurope",
+   "system_service": "AzureStorage"
+  },
+  "value": "13.69.40.16/28"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": "westeurope",
+   "service": "Storage.WestEurope",
+   "system_service": "AzureStorage"
+  },
+  "value": "13.95.96.176/28"
+ },
+ {
+  "attrs": {
+   "provider": "azure",
+   "region": "westeurope",
+   "service": "Storage.WestEurope",
+   "system_service": "AzureStorage"
+  },
+  "value": "2603:1020:207::/48"
+ }
+]

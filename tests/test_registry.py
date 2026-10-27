@@ -142,3 +142,15 @@ def test_url_template_needs_a_period_known_before_the_fetch(tmp_path):
     bad = TOR.replace('url: "https://check.torproject.org/torbulkexitlist"', 'url: "https://w/{period}"')
     with pytest.raises(RegistryError, match="URL template"):
         load_feed(write(tmp_path, bad))
+
+
+def test_discover_replaces_url_and_needs_a_valid_regex(tmp_path):
+    ok = mutate(TOR, 'url: "https://check.torproject.org/torbulkexitlist"',
+                'discover: {page: "https://w/details", pattern: "https://d/[^\\"]+\\\\.json"}')
+    assert load_feed(write(tmp_path, ok)).fetch.discover.page == "https://w/details"
+    both = mutate(TOR, 'format: lines}', 'format: lines, discover: {page: "https://w/details", pattern: x}}')
+    with pytest.raises(RegistryError, match="discover"):
+        load_feed(write(tmp_path, both))
+    bad_regex = mutate(ok, 'pattern: "https://d/[^\\"]+\\\\.json"', 'pattern: "(["')
+    with pytest.raises(RegistryError, match="regex"):
+        load_feed(write(tmp_path, bad_regex))

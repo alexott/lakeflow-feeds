@@ -1,0 +1,40 @@
+name: azure_ip_ranges
+mode: replace
+history: {type: snapshots, retain_days: 30}
+category: cloud_range
+effect: enrich
+observable_type: net_addr
+fetch:
+  operator: http_snapshot
+  # Azure service tags (public cloud). Each weekly release has a new file name
+  # (ServiceTags_Public_<date>.json under a new path), so read the link from the download page.
+  discover:
+    page: https://www.microsoft.com/en-us/download/details.aspx?id=56519
+    pattern: 'https://download\.microsoft\.com/download/[^"''\s<>]+/ServiceTags_Public_\d{8}\.json'
+  format: json
+  # The download page returns 403 to clients that do not look like a browser (curl, a bare "Mozilla/5.0").
+  headers:
+    User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+# The ETag is per file: a new release has a new URL and downloads in full; an unchanged one gets 304.
+change_detection: etag
+# A new file is published about once a week; a daily check costs one page load and a conditional request.
+schedule: {daily_at: "04:43"}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  # One record per service tag (AzureCloud, AzureCloud.westeurope, Storage.WestEurope, ...); the same
+  # prefix is listed in several tags: one row per (prefix, service tag).
+  - records: "values[]"
+  - extract:
+      service: name
+      region: "properties.region || `null`"  # empty for global tags
+      system_service: "properties.systemService || `null`"
+  - explode: {path: properties.addressPrefixes, as: cidr}
+  - apply: {cidr: [cidr_normalize]}
+  - drop_if_empty: [cidr]
+  - output:
+      value: cidr
+      attrs: {provider: "'azure'", service: service, region: region, system_service: system_service}
+validate: {min_records: 50000}
+license: "Microsoft Azure IP Ranges and Service Tags - Public Cloud (https://www.microsoft.com/en-us/download/details.aspx?id=56519)"

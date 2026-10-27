@@ -56,6 +56,20 @@ class Cursor(_Model):
     max_lookback_hours: int | None = None
 
 
+class Discover(_Model):
+    """The file URL changes with each release (Azure service tags): read it from a landing page first."""
+    page: str  # landing page that links to the current file
+    pattern: str  # regex; the first match (group 1 if the pattern has a group) is the file URL
+
+    @model_validator(mode="after")
+    def _pattern(self):
+        try:
+            re.compile(self.pattern)
+        except re.error as e:
+            raise ValueError(f"discover.pattern is not a valid regex: {e}") from e
+        return self
+
+
 class Fetch(_Model):
     operator: Literal["http_snapshot", "github_repo", "rest_paginated", "taxii21_poll", "custom", "dns_derive"]
     url: str | None = None
@@ -71,6 +85,7 @@ class Fetch(_Model):
     headers: dict[str, str] = Field(default_factory=dict)  # values may hold {{secrets/<scope>/<key>}} references
     ok_when: str | None = None  # JMESPath on the JSON response; false -> the fetch fails (API error bodies with HTTP 200)
     entrypoint: str | None = None
+    discover: Discover | None = None  # find url on a landing page before each fetch (and HEAD)
 
 
 class Period(_Model):
@@ -163,6 +178,9 @@ class FeedSpec(_Model):
         if _URL_TEMPLATE.search(self.fetch.url or "") and not (
                 self.mode == "append" and self.period and self.period.source in ("today", "yesterday")):
             raise ValueError("a {period} URL template needs mode: append with period source today or yesterday")
+        if self.fetch.discover and (self.fetch.url or self.fetch.method != "GET" or self.fetch.pagination
+                                    or self.fetch.connection):
+            raise ValueError("fetch.discover replaces fetch.url and needs a plain GET (no pagination, no connection)")
         if self.fetch.split_by and not self.fetch.pagination:
             raise ValueError("fetch.split_by needs fetch.pagination")
         if self.fetch.operator == "custom" and not self.fetch.entrypoint:

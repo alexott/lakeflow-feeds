@@ -304,3 +304,42 @@ def test_single_fetch_retries_5xx_with_backoff():
     slept = []
     assert fetch(F, "none", FeedState(), sleep=slept.append, server_error_retries=5).content == b"ok"
     assert slept == [2, 4, 8]
+
+
+PAGE = "https://example.test/details?id=1"
+FILE = "https://dl.example.test/download/a/b/Tags_20261019.json"
+DF = Fetch(operator="http_snapshot", format="json", headers={"User-Agent": "Browser"},
+           discover={"page": PAGE, "pattern": r"https://dl\.example\.test/download/\S+?/Tags_\d{8}\.json"})
+
+
+@responses.activate
+def test_discover_reads_the_file_url_from_the_page():
+    ua = responses.matchers.header_matcher({"User-Agent": "Browser"})
+    responses.get(PAGE, body=f'<a href="{FILE}">Download</a> {FILE}', match=[ua])
+    responses.get(FILE, json={"values": []}, headers={"ETag": '"e9"'},
+                  match=[ua, responses.matchers.header_matcher({"If-None-Match": '"e8"'})])
+    r = fetch(DF, "etag", FeedState(etag='"e8"'))
+    assert r.changed and r.url == FILE and r.etag == '"e9"'  # the manifest gets the real file URL
+
+
+@responses.activate
+def test_discover_with_a_group_and_a_relative_link():
+    f = DF.model_copy(update={"discover": DF.discover.model_copy(update={"pattern": r'href="([^"]+\.json)"'})})
+    responses.get(PAGE, body='<a href="/files/Tags_20261026.json">x</a>')
+    responses.head("https://example.test/files/Tags_20261026.json", headers={"ETag": '"e1"'})
+    assert head(f) == ('"e1"', None)
+
+
+@responses.activate
+def test_discover_fails_when_the_page_has_no_link():
+    responses.get(PAGE, body="<html>Access denied</html>")
+    with pytest.raises(FetchError, match="no link matching"):
+        fetch(DF, "etag", FeedState())
+
+
+@responses.activate
+def test_discover_retries_the_page():
+    responses.get(PAGE, status=503)
+    responses.get(PAGE, body=FILE)
+    responses.get(FILE, body=b"{}")
+    assert fetch(DF, "none", FeedState(), sleep=NO_SLEEP).content == b"{}"

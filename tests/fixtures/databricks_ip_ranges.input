@@ -1,0 +1,75 @@
+{
+ "timestampSeconds": 1791277588,
+ "schemaVersion": "1.0",
+ "prefixes": [
+  {
+   "platform": "aws",
+   "region": "ap-northeast-1",
+   "service": "Databricks",
+   "type": "inbound",
+   "ipv4Prefixes": [
+    "18.99.67.176/28",
+    "35.72.28.0/28",
+    "  bad "
+   ],
+   "ipv6Prefixes": []
+  },
+  {
+   "platform": "aws",
+   "region": "ap-northeast-1",
+   "service": "Databricks",
+   "type": "outbound",
+   "ipv4Prefixes": [
+    "18.177.16.95/32",
+    "35.72.28.0/28"
+   ],
+   "ipv6Prefixes": [
+    "2600:1F18:0000::/36"
+   ]
+  },
+  {
+   "platform": "azure",
+   "region": "australiacentral",
+   "service": "Databricks",
+   "type": "inbound",
+   "ipv4Prefixes": [
+    "13.75.218.172/32",
+    "20.70.34.64/28"
+   ],
+   "ipv6Prefixes": []
+  },
+  {
+   "platform": "azure",
+   "region": "australiacentral",
+   "service": "Databricks",
+   "type": "outbound",
+   "ipv4Prefixes": [
+    "13.70.105.50/32",
+    "20.11.26.96/29"
+   ],
+   "ipv6Prefixes": []
+  },
+  {
+   "platform": "gcp",
+   "region": "asia-northeast1",
+   "service": "Databricks",
+   "type": "inbound",
+   "ipv4Prefixes": [
+    "34.146.146.176/28",
+    "34.146.235.35/32"
+   ],
+   "ipv6Prefixes": []
+  },
+  {
+   "platform": "gcp",
+   "region": "asia-northeast1",
+   "service": "Databricks",
+   "type": "outbound",
+   "ipv4Prefixes": [
+    "34.146.146.176/28",
+    "34.146.86.3/32"
+   ],
+   "ipv6Prefixes": []
+  }
+ ]
+}

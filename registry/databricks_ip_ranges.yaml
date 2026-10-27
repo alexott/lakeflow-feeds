@@ -1,0 +1,27 @@
+name: databricks_ip_ranges
+mode: replace
+history: {type: snapshots, retain_days: 30}
+category: cloud_range
+effect: enrich
+observable_type: net_addr
+fetch:
+  operator: http_snapshot
+  url: https://www.databricks.com/networking/v1/ip-ranges.json
+  format: json
+change_detection: etag
+# Databricks updates the ranges about every two weeks.
+schedule: {every: 12h}
+sink: zerobus
+curation: views
+targets: [tables]
+transform:
+  # One record per (cloud, region, inbound/outbound); the same prefix can be in both directions: one row each.
+  - records: "prefixes[]"
+  - explode: {path: "[ipv4Prefixes, ipv6Prefixes][]", as: cidr}
+  - apply: {cidr: [cidr_normalize]}
+  - drop_if_empty: [cidr]
+  - output:
+      value: cidr
+      attrs: {provider: "'databricks'", cloud: platform, region: region, direction: type, service: service}
+validate: {min_records: 200}
+license: "Databricks IP addresses and domains (https://docs.databricks.com/aws/en/resources/ip-domain-region)"

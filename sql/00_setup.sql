@@ -78,6 +78,14 @@ CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.gcp_ip_ranges (
   feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
   record_no BIGINT, record_type STRING, payload VARIANT
 ) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed gcp_ip_ranges (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.azure_ip_ranges (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed azure_ip_ranges (replay source).';
+CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.databricks_ip_ranges (
+  feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
+  record_no BIGINT, record_type STRING, payload VARIANT
+) CLUSTER BY (fetch_id) COMMENT 'Raw records of feed databricks_ip_ranges (replay source).';
 CREATE TABLE IF NOT EXISTS {{catalog}}.{{raw_schema}}.cloudflare_ips_v4 (
   feed STRING, fetch_id STRING, fetched_at TIMESTAMP, source_url STRING, source_version STRING,
   record_no BIGINT, record_type STRING, payload VARIANT

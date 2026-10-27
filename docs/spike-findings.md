@@ -127,6 +127,13 @@ Six feeds with other shapes and schedules, so S6 covers more than hourly IoC fee
 - The first runs of all six started at the same second (15:31:12 UTC), so they probably shared compute. The billing rows will show whether usage goes to only one of them.
 - Not added: PhishTank (`online-valid.json` now returns an image) and the Infoblox CSV from sirens (404; the repository moved). MISP warninglists and ESET need the `github_repo` operator, which is not built yet.
 
+## Azure and Databricks IP ranges (2026-10-27)
+
+| Feed | Mode | Schedule | First fetch | Notes |
+|---|---|---|---|---|
+| `azure_ip_ranges` | replace | daily 04:43 UTC | 110,437 rows (68,296 distinct CIDRs), 3,321 raw records, task 384 s | The file name changes with each weekly release: new `fetch.discover: {page, pattern}` reads the link from the download page. The page returns 403 without a full browser User-Agent. Raw records are up to 244 KB (`AzureCloud`); Zerobus accepted the 1,000-row batches |
+| `databricks_ip_ranges` | replace | every 12 h | 1,117 rows (882 distinct CIDRs), 183 raw records, task 340 s | Weak ETag (`W/"..."`); a conditional GET still gets 304. No IPv6 prefixes in the file yet |
+
 ## Platform findings (2026-10-26)
 
 - Task retries (`max_retries`) do not work for `python_operator_task`: attempts 1 and 2 fail within seconds with "Task failed due to an internal error". A failed run waits for the next scheduled run.

@@ -265,6 +265,47 @@ resources:
               - {name: registry_dir, value: "${workspace.file_path}/registry"}
               - {name: force, value: "{{job.parameters.force}}"}
 
+    feed_azure_ip_ranges:
+      name: "feed azure_ip_ranges"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: azure_ip_ranges}
+      parameters:
+        - {name: force, default: "false"}
+      # A new file about once a week; the URL is read from the download page on each run.
+      schedule: {quartz_cron_expression: "0 43 4 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: azure_ip_ranges}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
+    feed_databricks_ip_ranges:
+      name: "feed databricks_ip_ranges"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: databricks_ip_ranges}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 13 2/12 * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: collect
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: databricks_ip_ranges}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
     # Both Cloudflare lists in one job: the two parallel tasks share compute (cost test for grouped feeds).
     feed_cloudflare_ips:
       name: "feed cloudflare_ips"

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import time
 import zipfile
 from dataclasses import dataclass
@@ -70,12 +71,28 @@ def _retry_after(resp: requests.Response, default: float = 30.0) -> float:
         return default
 
 
+def discover(f: Fetch, **kwargs) -> Fetch:
+    """Download f.discover.page and return the fetch with url set to the first pattern match.
+    The page GET has the same headers, retries, and 429 handling as a normal fetch (kwargs go to fetch())."""
+    page = f.model_copy(update={"url": f.discover.page, "discover": None, "format": "lines"})
+    text = fetch(page, "none", FeedState(), **kwargs).content.decode("utf-8", "replace")
+    m = re.search(f.discover.pattern, text)
+    if not m:
+        raise FetchError(f"no link matching {f.discover.pattern!r} on {f.discover.page}; "
+                         f"the page layout may have changed: {text[:300]!r}")
+    return f.model_copy(update={"url": urljoin(f.discover.page, m.group(1) if m.groups() else m.group(0)),
+                                "discover": None})
+
+
 def fetch(fetch: Fetch, change_detection: str, state: FeedState, *, session=None, host=None, auth_headers=None,
           secret_lookup=None, sleep=time.sleep, attempts: int = 3, timeout: int = 300,
           max_retry_after: float = 60.0, now: datetime | None = None, server_error_retries: int = 5) -> FetchResult:
     """429 with a short Retry-After (<= max_retry_after) is retried within the attempt budget;
     a longer wait raises RateLimited, so the job retry (or a sensor deferral) takes over."""
     session = session or requests
+    if fetch.discover:
+        fetch = discover(fetch, session=session, secret_lookup=secret_lookup, sleep=sleep, attempts=attempts,
+                         timeout=timeout, max_retry_after=max_retry_after, server_error_retries=server_error_retries)
     url, headers = resolve(fetch, host=host, auth_headers=auth_headers, secret_lookup=secret_lookup)
     shown = _shown(fetch)
     body = substitute_all(fetch.body, secret_lookup)
@@ -196,6 +213,8 @@ def head(fetch: Fetch, *, session=None, host=None, auth_headers=None, secret_loo
     if fetch.method != "GET":
         return None, None
     session = session or requests
+    if fetch.discover:
+        fetch = discover(fetch, session=session, secret_lookup=secret_lookup, timeout=timeout)
     url, headers = resolve(fetch, host=host, auth_headers=auth_headers, secret_lookup=secret_lookup)
     resp = session.head(url, headers=headers, timeout=timeout, allow_redirects=True)
     if resp.status_code == 429:
