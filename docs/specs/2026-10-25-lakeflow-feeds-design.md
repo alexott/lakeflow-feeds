@@ -2,7 +2,7 @@
 
 Status: approved (conversation 2026-10-25, written spec approved 2026-10-26).
 Workspace: `az-alexott` (SQL warehouse "Cybersecurity" `3b70a3031825736c`, Lakewatch v2 catalog `lwv2_aottdb`).
-Subproject directory: `vibe-place/lakeflow-feeds/`.
+Project directory: the root of this repository.
 
 ## 1. Intent
 
@@ -144,7 +144,7 @@ Components, each with one purpose:
 
 ## 4. Feed registry
 
-One YAML file per feed in `lakeflow-feeds/registry/`. Example:
+One YAML file per feed in `registry/`. Example:
 
 ```yaml
 name: tor_exit_nodes

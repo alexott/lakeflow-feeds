@@ -212,4 +212,4 @@ All numbers come from these system tables in workspace 6688808130562317:
 - The UC API: Zerobus `table_id` to table name (no system table has this mapping).
 - `cybersecurity.feeds_raw.records`: rows per feed, for the split of the shared `records` Zerobus cost.
 
-The per-day and per-feed queries are similar to `lakeflow-feeds/scripts/cost_by_feed.sql`. Run `lakeflow-feeds/scripts/cost_by_feed.py` to get a new copy of the per-day numbers.
+The per-day and per-feed queries are similar to `scripts/cost_by_feed.sql`. Run `scripts/cost_by_feed.py` to get a new copy of the per-day numbers.

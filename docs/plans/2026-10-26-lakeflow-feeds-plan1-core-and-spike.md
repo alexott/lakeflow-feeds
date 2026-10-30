@@ -1,5 +1,7 @@
 # Lakeflow feeds — Plan 1: feedkit core + phase 0 spike
 
+> **Note:** This plan was written when the project was a `lakeflow-feeds/` subdirectory of a larger repository. Paths that start with `lakeflow-feeds/` are now relative to the root of this repository. The spec is now `docs/specs/2026-10-25-lakeflow-feeds-design.md`, and the spike findings are now `docs/spike-findings.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the `feedkit` core library (registry, transforms, validation, commit protocol, state, HTTP fetch, sinks, Lakeflow Integration wrappers). Then run the phase 0 spike on az-alexott with four feeds (Tor = `replace`, Tranco = `append`, Feodo and ThreatFox = `merge`) and write `docs/lakeflow-feeds-spike-findings.md` with answers to S1–S7.

@@ -1,10 +1,10 @@
 # Lakeflow feeds — phase 0 spike findings
 
-Status: **partial** (2026-10-26). S1, S2, S3, S4, S5, and S7 are answered. S6 cost has first numbers from one hour; run `lakeflow-feeds/scripts/cost_by_feed.py` after 2026-10-29 and finish it.
+Status: **partial** (2026-10-26). S1, S2, S3, S4, S5, and S7 are answered. S6 cost has first numbers from one hour; run `scripts/cost_by_feed.py` after 2026-10-29 and finish it.
 
 - Workspace: az-alexott (`adb-6688808130562317`, westeurope). Lakewatch catalog `lwv2_aottdb`.
 - Bundle `lakeflow_feeds`, target `spike`, branch `lakeflow-feeds-design`.
-- Plan: `docs/superpowers/plans/2026-10-26-lakeflow-feeds-plan1-core-and-spike.md`. Spec: `docs/superpowers/specs/2026-10-25-lakeflow-feeds-design.md`.
+- Plan: `docs/plans/2026-10-26-lakeflow-feeds-plan1-core-and-spike.md`. Spec: `docs/specs/2026-10-25-lakeflow-feeds-design.md`.
 - Run-as identity: service principal `feeds-collector` (application id `8de6a595-c6f8-4ea0-ba89-22b11495ca00`).
 
 ## Answers
@@ -50,7 +50,7 @@ From the probe report (run 173430919737901, file `/Volumes/cybersecurity/feeds/s
 
 ### S6 — Cost
 
-Partial (2026-10-26). Billing for workspace 6688808130562317 is complete only up to 11:00 UTC, so these numbers cover one hour (10:00–11:00 UTC). That hour also has spike work in it: 3 probe runs, 2 failed sensor runs, and the first loads. Run `lakeflow-feeds/scripts/cost_by_feed.py` again after 2026-10-29. List price: $0.50 per DBU (`PREMIUM_JOBS_SERVERLESS_COMPUTE_EU_WEST`).
+Partial (2026-10-26). Billing for workspace 6688808130562317 is complete only up to 11:00 UTC, so these numbers cover one hour (10:00–11:00 UTC). That hour also has spike work in it: 3 probe runs, 2 failed sensor runs, and the first loads. Run `scripts/cost_by_feed.py` again after 2026-10-29. List price: $0.50 per DBU (`PREMIUM_JOBS_SERVERLESS_COMPUTE_EU_WEST`).
 
 How billing works for this project:
 

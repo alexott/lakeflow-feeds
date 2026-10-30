@@ -337,8 +337,8 @@ The script creates the parser and the datasource. You can run it again: it updat
 
 ## Status and limitations
 
-- Spike findings: [`../docs/lakeflow-feeds-spike-findings.md`](../docs/lakeflow-feeds-spike-findings.md). Some items are still open: sensor billing during a deferred wait, cost per tier, and Lakewatch incremental runs.
-- Design: [`../docs/superpowers/specs/2026-10-25-lakeflow-feeds-design.md`](../docs/superpowers/specs/2026-10-25-lakeflow-feeds-design.md). Plan 1: [`../docs/superpowers/plans/2026-10-26-lakeflow-feeds-plan1-core-and-spike.md`](../docs/superpowers/plans/2026-10-26-lakeflow-feeds-plan1-core-and-spike.md).
+- Spike findings: [`docs/spike-findings.md`](docs/spike-findings.md). Some items are still open: sensor billing during a deferred wait, cost per tier, and Lakewatch incremental runs.
+- Design: [`docs/specs/2026-10-25-lakeflow-feeds-design.md`](docs/specs/2026-10-25-lakeflow-feeds-design.md). Plan 1: [`docs/plans/2026-10-26-lakeflow-feeds-plan1-core-and-spike.md`](docs/plans/2026-10-26-lakeflow-feeds-plan1-core-and-spike.md).
 - Jobs and SQL objects are written by hand for each feed. They are not generated from the registry yet.
 - Zerobus REST wire format: TIMESTAMP is epoch microseconds, DATE is days since epoch, and VARIANT is a JSON string. `feedkit.sinks.zerobus_encode` does the conversion.
 - In Lakewatch, domains and URLs both go to the `hostnames` bucket. There is no `domains` or `urls` bucket.
