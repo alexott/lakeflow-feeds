@@ -27,6 +27,89 @@ resources:
             parameters:
               - {name: connection, value: "{{job.parameters.connection}}"}
 
+    # The 7 hourly threat-intel feeds as parallel tasks of one job: tasks of one run share serverless compute,
+    # so the fixed cost per run (about 0.012 DBU) is paid once per hour, not 7 times (cost test). The single-feed
+    # jobs below stay deployed with paused schedules, for manual and forced runs.
+    feed_threat_hourly:
+      name: "feed threat_hourly"
+      <<: [*env, *run_as]
+      max_concurrent_runs: 1
+      tags: {feed: _threat_hourly}
+      parameters:
+        - {name: force, default: "false"}
+      schedule: {quartz_cron_expression: "0 7 * * * ?", timezone_id: UTC}
+      tasks:
+        - task_key: feodo_ipblocklist
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: feodo_ipblocklist}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: malwarebazaar_recent
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: malwarebazaar_recent}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: otx_indicators
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: otx_indicators}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: threatfox_recent
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: threatfox_recent}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: tor_exit_nodes
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: tor_exit_nodes}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: urlhaus_payloads
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: urlhaus_payloads}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+        - task_key: urlhaus_urls
+          max_retries: 2
+          min_retry_interval_millis: 300000
+          environment_key: feeds_environment
+          python_operator_task:
+            main: feedkit.integrations.collect_feed
+            parameters:
+              - {name: feed, value: urlhaus_urls}
+              - {name: registry_dir, value: "${workspace.file_path}/registry"}
+              - {name: force, value: "{{job.parameters.force}}"}
+
     feed_tor_exit_nodes:
       name: "feed tor_exit_nodes"
       <<: [*env, *run_as]
@@ -34,7 +117,7 @@ resources:
       tags: {feed: tor_exit_nodes}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 7 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 7 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2
@@ -54,7 +137,7 @@ resources:
       tags: {feed: feodo_ipblocklist}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 17 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 17 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2
@@ -74,7 +157,7 @@ resources:
       tags: {feed: otx_indicators}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 52 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 52 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2
@@ -94,7 +177,7 @@ resources:
       tags: {feed: urlhaus_urls}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 37 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 37 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2
@@ -114,7 +197,7 @@ resources:
       tags: {feed: urlhaus_payloads}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 42 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 42 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2
@@ -134,7 +217,7 @@ resources:
       tags: {feed: malwarebazaar_recent}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 47 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 47 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2
@@ -154,7 +237,7 @@ resources:
       tags: {feed: threatfox_recent}
       parameters:
         - {name: force, default: "false"}
-      schedule: {quartz_cron_expression: "0 27 * * * ?", timezone_id: UTC}
+      schedule: {quartz_cron_expression: "0 27 * * * ?", timezone_id: UTC, pause_status: PAUSED}
       tasks:
         - task_key: collect
           max_retries: 2

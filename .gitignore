@@ -3,3 +3,4 @@ dist/
 __generated__/
 .databricks/
 __pycache__/
+/.isaac/
