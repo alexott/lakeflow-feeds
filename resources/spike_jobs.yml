@@ -34,6 +34,7 @@ resources:
       name: "feed threat_hourly"
       <<: [*env, *run_as]
       max_concurrent_runs: 1
+      queue: {enabled: true}
       tags: {feed: _threat_hourly}
       parameters:
         - {name: force, default: "false"}
