@@ -1,6 +1,6 @@
 # lakeflow-feeds: cost report
 
-Data as of 2026-10-30, 05:00 UTC (the last complete billing hour). Workspace `az-alexott` (6688808130562317, Azure West Europe). All money values are **list price** (USD), not a discounted price. The serverless jobs SKU (`PREMIUM_JOBS_SERVERLESS_COMPUTE_EU_WEST`) costs $0.50 per DBU. All four compute parts below use this SKU.
+The original full-project report uses data through 2026-10-30, 05:00 UTC. The hourly-feed collocation experiment below uses billing data through 2026-11-01, 12:00 UTC. Workspace `az-alexott` (6688808130562317, Azure West Europe). All money values are **list price** (USD), not a discounted price. The serverless jobs SKU (`PREMIUM_JOBS_SERVERLESS_COMPUTE_EU_WEST`) costs $0.50 per DBU. All four compute parts below use this SKU.
 
 ## Summary
 
@@ -10,6 +10,33 @@ Data as of 2026-10-30, 05:00 UTC (the last complete billing hour). Workspace `az
 - The **SDP pipeline** is only 9% now. It refreshes one time per day in standard mode. On 2026-10-26 it refreshed every hour, and that cost 2.8 DBU in about 10 hours.
 - **Zerobus ingest** is 7%. The two 1M-row top-sites lists (Cisco Umbrella and Tranco) are most of it.
 - Total since the start (2026-10-26 10:00 UTC to 2026-10-30 05:00 UTC): **25.6 DBU, $12.82**.
+- A preliminary full-day measurement of the seven hourly feeds in one parallel-task job used **0.448 DBU/day ($0.224/day)**, down **81.2%** from the seven individual jobs' 2.385 DBU/day baseline.
+
+## Hourly-feed collocation experiment
+
+The seven hourly threat-intelligence feeds were moved from seven separately scheduled jobs into parallel tasks of one job, `[spike] feed threat_hourly` (job ID `715999103215155`). The grouped job was created on 2026-10-30 at 18:52 UTC. Its first complete UTC day was 2026-10-31; billing for that day was complete when checked on 2026-11-01 at 12:00 UTC.
+
+The baseline is the same three complete days used elsewhere in this report, 2026-10-27 through 2026-10-29. It is the sum of Jobs billing for `feodo_ipblocklist`, `malwarebazaar_recent`, `otx_indicators`, `threatfox_recent`, `tor_exit_nodes`, `urlhaus_payloads`, and `urlhaus_urls`.
+
+| Layout | Measurement window | DBU/day | USD/day | USD/30 days |
+|---|---|---:|---:|---:|
+| Seven individual jobs | 2026-10-27 to 2026-10-29 average | 2.385 | $1.193 | $35.78 |
+| One job with seven parallel tasks | 2026-10-31 | 0.448 | $0.224 | $6.72 |
+| **Change** | | **-81.2%** | **-$0.969/day** | **-$29.07/30 days** |
+
+One hourly cycle fell from 0.0994 DBU for the seven separate jobs to 0.0187 DBU for the grouped run. The grouped job therefore costs about 1.3 times one old single-feed run while executing all seven tasks.
+
+The reliability check for 2026-10-31 found:
+
+- 24 grouped job runs and 168 task runs, exactly 24 for each feed;
+- all 168 tasks succeeded;
+- no skipped or failed task runs;
+- average grouped-run duration of 234 seconds;
+- per-feed p95 execution time between 247 and 284 seconds, with a maximum of 290 seconds.
+
+As a cross-check against serverless shared-compute attribution, total feed-job billing fell from a baseline average of 2.782 DBU/day to 0.850 DBU on 2026-10-31. Billing for the non-hourly feed jobs stayed stable: 0.397 DBU/day on average in the baseline versus 0.402 DBU on 2026-10-31. The observed reduction is therefore not explained by the hourly cohort's usage being reassigned to another feed job.
+
+This result is **preliminary** because the grouped layout currently has one complete measured day, while the baseline has three. Repeat the comparison after three complete grouped days. The first day nevertheless shows a large effect with a complete and successful workload.
 
 ## What is in scope
 
@@ -191,7 +218,7 @@ The MB value is the length of the JSON of the main columns. It is only for the s
 
 | Change | Saving (est.) | Notes |
 |---|---|---|
-| Run the 7 hourly threat-intel feeds less often (for example every 2–4 hours), or put them into one job with parallel tasks | Up to about $1 per day (most of the $1.39 for feed jobs) | A run costs at least about 0.014 DBU, also when nothing changed. The `cloudflare_ips` job runs 2 tasks in parallel for about 0.02 DBU in total, so tasks in one job share compute. |
+| Keep the 7 hourly threat-intel feeds in one job with parallel tasks | Measured $0.97 per day ($29 per 30 days), preliminary | One complete grouped day used 0.448 DBU versus a 2.385 DBU/day three-day baseline for the individual jobs, an 81.2% reduction. Recheck after three grouped days. |
 | Run the Lakewatch datasource every 12 or 24 hours instead of every 6 hours | $0.45–0.70 per day | The cost is per run (about 0.43 DBU), not per row. The trade-off is fresher data in Lakewatch. |
 | Keep SDP on the daily standard-mode schedule | Already done | Hourly SDP would be about $2.5–3.5 per day. |
 | Change-only writes for merge feeds (Plan 2) | Small (Zerobus is 7%) | It also makes the `records` table and the Lakewatch reads smaller. |
