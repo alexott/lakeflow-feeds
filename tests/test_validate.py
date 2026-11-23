@@ -40,6 +40,12 @@ def test_merge_default_change_limit_is_50_percent_and_growth_counts():
         check(spec("merge"), recs(151), last_count=100)
 
 
+def test_change_check_can_be_turned_off():
+    # a rolling time-window feed (malwarebazaar get_recent) has counts like 4 -> 260 in normal hours
+    check(spec("merge", max_change_pct=False), recs(260), last_count=4)
+    check(spec("merge", max_change_pct=False), recs(1), last_count=400)
+
+
 def test_no_change_check_without_history():
     check(spec(), recs(1), last_count=None)
     check(spec(), recs(1), last_count=0)

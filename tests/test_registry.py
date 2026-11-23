@@ -57,6 +57,18 @@ def test_explicit_max_change_wins(tmp_path):
     assert load_feed(write(tmp_path, text)).max_change_pct == 5.0
 
 
+@pytest.mark.parametrize("value", ["false", "off"])
+def test_max_change_can_be_turned_off(tmp_path, value):
+    text = mutate(TOR, "validate: {min_records: 500}", f"validate: {{min_records: 500, max_change_pct: {value}}}")
+    assert load_feed(write(tmp_path, text)).max_change_pct is None
+
+
+def test_max_change_true_is_rejected(tmp_path):
+    text = mutate(TOR, "validate: {min_records: 500}", "validate: {min_records: 500, max_change_pct: true}")
+    with pytest.raises(RegistryError):
+        load_feed(write(tmp_path, text))
+
+
 @pytest.mark.parametrize("old,new,message", [
     ("mode: replace\nhistory: {type: snapshots, retain_days: 90}", "mode: append", "period"),
     ("mode: replace\nhistory: {type: snapshots, retain_days: 90}", "mode: merge", "key"),

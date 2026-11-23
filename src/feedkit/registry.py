@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from feedkit.secrets import malformed_refs
 
@@ -107,8 +107,17 @@ class History(_Model):
 
 class Checks(_Model):
     min_records: int = 1
-    max_change_pct: float | None = None
+    # None = the mode default; false (or YAML `off`) turns the check off, for feeds whose count is a rolling
+    # time window. Literal[False] comes first so pydantic does not coerce false to 0.0.
+    max_change_pct: Literal[False] | float | None = None
     canaries: list[str] = Field(default_factory=list)
+
+    @field_validator("max_change_pct", mode="before")
+    @classmethod
+    def _no_true(cls, v):
+        if v is True:
+            raise ValueError("max_change_pct: true is not a limit; use a number, or false to turn the check off")
+        return v
 
 
 class Expiry(_Model):
@@ -142,7 +151,10 @@ class FeedSpec(_Model):
     status: str = "active"
 
     @property
-    def max_change_pct(self) -> float:
+    def max_change_pct(self) -> float | None:
+        """The change limit in percent, or None if the feed turned the check off."""
+        if self.validate_.max_change_pct is False:
+            return None
         if self.validate_.max_change_pct is not None:
             return float(self.validate_.max_change_pct)
         return 20.0 if self.mode == "replace" else 50.0

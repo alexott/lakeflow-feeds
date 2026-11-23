@@ -67,7 +67,7 @@ Each feed has its own job in `resources/spike_jobs.yml`. The `collect` task call
 1. **Skip if nothing changed.** It sends a conditional GET (ETag or Last-Modified) when the feed has `change_detection`. It also compares the SHA-256 of the response with the last commit. For `append` feeds, it stops when the period (day) is already committed.
 2. **Fetch.** `src/feedkit/http.py` handles GET/POST, JSON or form bodies, pagination, `split_by` (one request series per value), a time cursor, bounded retries (5xx and 429 have separate budgets), and an optional UC HTTP connection proxy.
 3. **Transform.** It runs the declarative steps of the feed (or a custom Python function). The result is a list of raw payloads and a list of normalized records.
-4. **Validate.** It checks `min_records`, `max_change_pct`, canary values, and the period cross-check. If a check fails, the task fails before it writes anything.
+4. **Validate.** It checks `min_records`, `max_change_pct`, canary values, and the period cross-check. If a check fails, the task fails before it writes anything. `max_change_pct` compares the record count with the last successful fetch (default 20% for `replace`, 50% otherwise). It is skipped for cursor feeds, and `max_change_pct: false` turns it off for feeds whose count is a rolling time window (for example `malwarebazaar_recent`, which gets the samples of the last hour).
 5. **Write.** It writes raw rows to `feeds_raw.<feed>` and normalized rows to `feeds_raw.records`. Both tables are append-only.
 6. **Commit.** It writes a manifest (`manifests/<feed>/[<period>/]<fetch_id>.json`). Then it writes the feed state (`state/<feed>.json`).
 

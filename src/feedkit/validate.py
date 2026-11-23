@@ -18,8 +18,9 @@ def check(spec: FeedSpec, records: list[dict], *, last_count: int | None,
     n = len(records)
     if n < spec.validate_.min_records:
         reasons.append(f"min_records: got {n}, need {spec.validate_.min_records}")
-    # force accepts a legitimate step change; a cursor feed's window size says nothing about the source
-    if last_count and not skip_change and spec.fetch.cursor is None:
+    # force accepts a legitimate step change; a cursor feed's window size says nothing about the source, and a
+    # feed can turn the check off (max_change_pct: false) for the same reason
+    if last_count and not skip_change and spec.fetch.cursor is None and spec.max_change_pct is not None:
         change = abs(n - last_count) / last_count * 100.0
         if change > spec.max_change_pct:
             reasons.append(f"max_change_pct: {last_count} -> {n} is {change:.1f}%, limit {spec.max_change_pct}%")
